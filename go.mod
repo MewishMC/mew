@@ -3,7 +3,6 @@ module github.com/kyarottoOwO/mew
 go 1.26.5
 
 require (
-	github.com/THEBOSS9345/bedrock-skin-go v0.2.5
 	github.com/google/uuid v1.6.0
 	github.com/nwaples/rardecode/v2 v2.2.5
 	github.com/swim-services/swim_porter v0.16.3
@@ -20,8 +19,6 @@ require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/crazy3lf/colorconv v1.2.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
-	github.com/fogleman/fauxgl v0.0.0-20250110135958-abf826acbbbd // indirect
-	github.com/fogleman/simplify v0.0.0-20170216171241-d32f302d5046 // indirect
 	github.com/gameparrot/fastpng v0.0.0-20250305185850-d72e123a2123 // indirect
 	github.com/gameparrot/tga v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect

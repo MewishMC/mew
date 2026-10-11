@@ -1,7 +1,5 @@
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 h1:N3IGoHHp9pb6mj1cbXbuaSXV/UMKwmbKLf53nQmtqMA=
 git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3/go.mod h1:QtOLZGz8olr4qH2vWK0QH0w0O4T9fEIjMuWpKUsH7nc=
-github.com/THEBOSS9345/bedrock-skin-go v0.2.5 h1:v8FBMH5v87iIbmcNGS2IklS1KxCq2jjy31VBxq+xH7U=
-github.com/THEBOSS9345/bedrock-skin-go v0.2.5/go.mod h1:a+r5d52ukgPDuj4q5LxuD+OUeN3eeRLIq1lyGsrpddo=
 github.com/bep/debounce v1.2.1 h1:v67fRdBA9UQu2NhLFXrSg0Brw7CexQekrBwDMM8bzeY=
 github.com/bep/debounce v1.2.1/go.mod h1:H8yggRPQKLUhUoqrJC1bO2xNya7vanpDl7xR3ISbCJ0=
 github.com/crazy3lf/colorconv v1.2.0 h1:UM7kSZWnwFMGiC+PpYrjxQSOd6sEyWb+dRKKTd3KslA=
@@ -10,10 +8,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/disintegration/imaging v1.6.2 h1:w1LecBlG2Lnp8B3jk5zSuNqd7b4DXhcjwek1ei82L+c=
 github.com/disintegration/imaging v1.6.2/go.mod h1:44/5580QXChDfwIclfc/PCwrr44amcmDAg8hxG0Ewe4=
-github.com/fogleman/fauxgl v0.0.0-20250110135958-abf826acbbbd h1:8bZGm26jDoW+JQ1ZPugRU0ADy5k45DRb42sOxEeufNo=
-github.com/fogleman/fauxgl v0.0.0-20250110135958-abf826acbbbd/go.mod h1:7f7F8EvO8MWvDx9sIoloOfZBCKzlWuZV/h3TjpXOO3k=
-github.com/fogleman/simplify v0.0.0-20170216171241-d32f302d5046 h1:n3RPbpwXSFT0G8FYslzMUBDO09Ix8/dlqzvUkcJm4Jk=
-github.com/fogleman/simplify v0.0.0-20170216171241-d32f302d5046/go.mod h1:KDwyDqFmVUxUmo7tmqXtyaaJMdGon06y8BD2jmh84CQ=
 github.com/gameparrot/fastpng v0.0.0-20250305185850-d72e123a2123 h1:sThO6jXyngtFu/mCwB4a19gkyGtQ9Ae0GALfOsoR1hY=
 github.com/gameparrot/fastpng v0.0.0-20250305185850-d72e123a2123/go.mod h1:4dreA1wSeh5wAyHlrnWvFL4Qd56NNP9MVhC2G8lxexc=
 github.com/gameparrot/tga v1.0.0 h1:kkwTSsvpAma9cKQy4OCJnTaDALEnbqC3bUz5JaeN5Zs=

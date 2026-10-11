@@ -4,26 +4,29 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/color"
+	_ "image/jpeg" // packs sometimes ship JPEG textures
+	"image/png"
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
-	"sort"
 	"strings"
 	"sync"
 
-	bedrockskin "github.com/THEBOSS9345/bedrock-skin-go"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/woozymasta/tga"
 )
 
-// maxTextureEdge bounds every texture the render service decodes. HD packs
-// ship 32 or 64 pixel armor and item textures; anything far bigger is not one.
+// The player is drawn in the frontend by bedrock-skin-viewer. This file finds
+// the textures it draws with - the pack's, else vanilla's, else MEW's own -
+// and hands them over as PNG data URIs. Every path a request names is resolved
+// here, so the frontend can never read outside the pack folders.
+
+// maxTextureEdge bounds every texture the service decodes. HD packs ship 32
+// or 64 pixel armor and item textures; anything far bigger is not one.
 const maxTextureEdge = 1024
 
 // mewDefaultSkin is MEW's own fallback skin, used when neither the pack nor
@@ -34,7 +37,7 @@ var mewDefaultSkin []byte
 
 var (
 	mewDefaultSkinOnce sync.Once
-	mewDefaultSkinImg  image.Image
+	mewDefaultSkinTex  *texture
 )
 
 // itemNameRe is the shape of an item texture name a pack may be asked for.
@@ -82,46 +85,49 @@ func itemNameVariants(name string) []string {
 	return variants
 }
 
-// RenderRequest describes one render of the player. Zero values are sensible:
-// no pack, no armor, no items, the front body view at 512px.
-type RenderRequest struct {
-	Pack      string             `json:"pack"`      // dir name; "" uses no pack (vanilla + default skin)
-	Base      string             `json:"base"`      // the folder Pack is in: "" for installed packs, else the server pack cache
-	Model     string             `json:"model"`     // "auto", "wide", "slim"
-	Material  string             `json:"material"`  // "" or "none" for no armor, else a material
-	Elytra    bool               `json:"elytra"`    // an elytra in place of the chestplate
-	Right     HandRequest        `json:"right"`     // the right hand's item
-	Left      HandRequest        `json:"left"`      // the left hand's item
-	View      string             `json:"view"`      // body, chest, head, avatar
-	Angle     string             `json:"angle"`     // front, iso; ignored when Camera is set
-	Camera    *CameraRequest     `json:"camera"`    // explicit camera; overrides Angle
-	Size      int                `json:"size"`      // clamp 32..1024, default 512
-	ModelSize float64            `json:"modelSize"` // Scale.Model, 0 = 1
-	Parts     map[string]float64 `json:"parts"`     // Scale.Parts, restricted to the six body parts
-	HideSkin  bool               `json:"hideSkin"`  // equipment only
-	Animation string             `json:"animation"` // "" for a still; else a Motion name or ExampleAnimations key
-	Frame     int                `json:"frame"`     // which frame of Animation to draw; wrapped into range
-	FPS       int                `json:"fps"`       // clamp 1..30, default 15
-	Frames    int                `json:"frames"`    // 0 = one loop; clamp to 120
+// PlayerRequest names what the player wears. Zero values are sensible: no
+// pack, no armor, no items.
+type PlayerRequest struct {
+	Pack     string `json:"pack"`     // dir name; "" uses no pack (vanilla + default skin)
+	Base     string `json:"base"`     // the folder Pack is in: "" for installed packs, else the server pack cache
+	Model    string `json:"model"`    // "auto", "wide", "slim"
+	Material string `json:"material"` // "" or "none" for no armor, else a material
+	Elytra   bool   `json:"elytra"`   // an elytra in place of the chestplate
+	Right    string `json:"right"`    // the right hand's item; "" holds nothing
+	Left     string `json:"left"`     // the left hand's item
 }
 
-// HandRequest is one hand's item and its optional manual adjustment.
-type HandRequest struct {
-	Item   string                 `json:"item"`   // "" holds nothing
-	Adjust bedrockskin.ItemAdjust `json:"adjust"` // zero = the game's placement
+// PlayerTextures is everything the viewer draws the player with, each a PNG
+// data URI. An empty texture is not worn.
+type PlayerTextures struct {
+	Skin   string      `json:"skin"`
+	Slim   bool        `json:"slim"`
+	Layer1 string      `json:"layer1"` // armor: helmet, chestplate, boots
+	Layer2 string      `json:"layer2"` // armor: leggings
+	Elytra string      `json:"elytra"`
+	Right  HeldTexture `json:"right"`
+	Left   HeldTexture `json:"left"`
 }
 
-// CameraRequest is an explicit camera, e.g. for the live view.
-type CameraRequest struct {
-	Yaw    float64 `json:"yaw"`
-	Pitch  float64 `json:"pitch"`
-	FOV    float64 `json:"fov"`
-	Margin float64 `json:"margin"`
+// HeldTexture is one hand's item: its sprite, and whether the game holds it
+// flat (food, materials) rather than upright (tools, weapons).
+type HeldTexture struct {
+	Item string `json:"item"`
+	Flat bool   `json:"flat"`
 }
 
-// allowedRenderParts are the only bone names a request may scale.
-var allowedRenderParts = map[string]bool{
-	"head": true, "body": true, "rightarm": true, "leftarm": true, "rightleg": true, "leftleg": true,
+// texture is a decoded image and the PNG bytes the frontend draws it from.
+type texture struct {
+	img  image.Image
+	data []byte
+}
+
+// dataURI is the texture as a PNG data URI, or "" for nil.
+func (t *texture) dataURI() string {
+	if t == nil {
+		return ""
+	}
+	return pngDataURI(t.data)
 }
 
 // --- texture resolution ---
@@ -199,32 +205,31 @@ func defaultSkinPath() string {
 }
 
 // defaultSkin returns the user's default skin, else MEW's own embedded one. It
-// is the fallback for a pack without a skin. It never returns nil.
-func (a *App) defaultSkin() image.Image {
+// is the fallback for a pack without a skin.
+func (a *App) defaultSkin() *texture {
 	if p := defaultSkinPath(); p != "" {
-		if img := a.loadFileTexture(p); img != nil {
-			return img
+		if t := a.loadFileTexture(p); t != nil {
+			return t
 		}
 	}
-	return mewSkinImage()
+	return mewSkinTexture()
 }
 
 // skinFor returns the player skin to draw: a skin being previewed for this
 // pack with "Change Skin", else the one saved for it, else the pack's own,
-// else the user's default skin, else MEW's own embedded one. It never returns
-// nil.
-func (a *App) skinFor(key, dir string) image.Image {
-	if img := a.previewSkin(key); img != nil {
-		return img
+// else the user's default skin, else MEW's own embedded one.
+func (a *App) skinFor(key, dir string) *texture {
+	if t := a.previewSkin(key); t != nil {
+		return t
 	}
 	if p := chosenSkinPath(key); p != "" {
-		if img := a.loadFileTexture(p); img != nil {
-			return img
+		if t := a.loadFileTexture(p); t != nil {
+			return t
 		}
 	}
 	if p := skinPath(dir); p != "" {
-		if img := a.loadFileTexture(p); img != nil {
-			return img
+		if t := a.loadFileTexture(p); t != nil {
+			return t
 		}
 	}
 	return a.defaultSkin()
@@ -232,11 +237,11 @@ func (a *App) skinFor(key, dir string) image.Image {
 
 // armorLayer returns one armor layer's texture: the pack's, else vanilla's for
 // a material vanilla ships. It returns nil for anything else.
-func (a *App) armorLayer(dir string, material string, layer int) image.Image {
+func (a *App) armorLayer(dir string, material string, layer int) *texture {
 	if dir != "" {
 		if p := packArmorPath(dir, material, layer); p != "" {
-			if img := a.loadFileTexture(p); img != nil {
-				return img
+			if t := a.loadFileTexture(p); t != nil {
+				return t
 			}
 		}
 	}
@@ -247,11 +252,11 @@ func (a *App) armorLayer(dir string, material string, layer int) image.Image {
 }
 
 // elytraTexture returns the elytra's texture: the pack's, else vanilla's.
-func (a *App) elytraTexture(dir string) image.Image {
+func (a *App) elytraTexture(dir string) *texture {
 	if dir != "" {
 		if p := packElytraPath(dir); p != "" {
-			if img := a.loadFileTexture(p); img != nil {
-				return img
+			if t := a.loadFileTexture(p); t != nil {
+				return t
 			}
 		}
 	}
@@ -263,7 +268,7 @@ func (a *App) elytraTexture(dir string) image.Image {
 // a valid texture name, or whose variants are not in the vanilla allow-list,
 // returns nil without ever fetching anything. Variants map friendly/Java names
 // to Bedrock's own (see itemNameVariants); the pack is checked under each.
-func (a *App) itemTexture(dir string, name string) image.Image {
+func (a *App) itemTexture(dir string, name string) *texture {
 	if !itemNameRe.MatchString(name) {
 		return nil
 	}
@@ -271,8 +276,8 @@ func (a *App) itemTexture(dir string, name string) image.Image {
 	if dir != "" {
 		for _, n := range variants {
 			if p := packItemPath(dir, n); p != "" {
-				if img := a.loadFileTexture(p); img != nil {
-					return img
+				if t := a.loadFileTexture(p); t != nil {
+					return t
 				}
 			}
 		}
@@ -287,7 +292,7 @@ func (a *App) itemTexture(dir string, name string) image.Image {
 
 // loadFileTexture decodes an image file, cached by path, size and mtime so an
 // edit in the Recolor tool is picked up.
-func (a *App) loadFileTexture(path string) image.Image {
+func (a *App) loadFileTexture(path string) *texture {
 	if path == "" {
 		return nil
 	}
@@ -297,30 +302,28 @@ func (a *App) loadFileTexture(path string) image.Image {
 	}
 	key := fmt.Sprintf("tex\x00%s\x00%d\x00%d", path, st.Size(), st.ModTime().UnixNano())
 	if v, ok := a.thumbCache.Load(key); ok {
-		if img, ok := v.(image.Image); ok {
-			return img
-		}
-		return nil
+		t, _ := v.(*texture)
+		return t
 	}
-	img, err := decodeImageFile(path)
+	t, err := loadTextureFile(path)
 	if err != nil {
 		a.logDebug(fmt.Sprintf("mew: texture %s: %v", path, err))
 		a.thumbCache.Store(key, missingTexture{})
 		return nil
 	}
-	a.thumbCache.Store(key, img)
-	return img
+	a.thumbCache.Store(key, t)
+	return t
 }
 
 // loadVanillaTexture decodes an immutable vanilla texture, cached by its
 // resource path. Only a definitive 404 is cached as missing; a transient
 // failure is retried, so a download that fails mid-run does not poison the
 // texture for the rest of the session.
-func (a *App) loadVanillaTexture(rel string) image.Image {
+func (a *App) loadVanillaTexture(rel string) *texture {
 	key := "vtex\x00" + rel
 	if v, ok := a.thumbCache.Load(key); ok {
-		img, _ := v.(image.Image)
-		return img
+		t, _ := v.(*texture)
+		return t
 	}
 	data, err := a.readVanillaFile(rel)
 	if err != nil {
@@ -332,61 +335,103 @@ func (a *App) loadVanillaTexture(rel string) image.Image {
 		}
 		return nil
 	}
-	img, err := decodeTexture(data)
+	t, err := newTexture(data)
 	if err != nil {
 		a.logDebug(fmt.Sprintf("mew: vanilla texture %s: %v", rel, err))
 		a.thumbCache.Store(key, missingTexture{})
 		return nil
 	}
-	a.thumbCache.Store(key, img)
-	return img
+	a.thumbCache.Store(key, t)
+	return t
 }
 
 // missingTexture marks a cache entry as a texture that could not be loaded.
 type missingTexture struct{}
 
-// decodeImageFile decodes a pack image, handling the TGA files packs ship
+// loadTextureFile reads a pack image, handling the TGA files packs ship
 // alongside PNGs.
-func decodeImageFile(path string) (image.Image, error) {
+func loadTextureFile(path string) (*texture, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	if strings.EqualFold(filepath.Ext(path), ".tga") {
-		return tga.Decode(bytes.NewReader(data))
+		img, err := tga.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		return textureFromImage(img)
 	}
-	return decodeTexture(data)
+	return newTexture(data)
+}
+
+// newTexture decodes encoded image bytes. A PNG is kept as it is, so the
+// frontend reads exactly the file the game reads; anything else (a JPEG) is
+// re-encoded as one.
+func newTexture(data []byte) (*texture, error) {
+	img, err := decodeTexture(data)
+	if err != nil {
+		return nil, err
+	}
+	if isPNG(data) {
+		return &texture{img: img, data: data}, nil
+	}
+	return textureFromImage(img)
+}
+
+// textureFromImage encodes a decoded image as a PNG texture.
+func textureFromImage(img image.Image) (*texture, error) {
+	if b := img.Bounds(); b.Dx() > maxTextureEdge || b.Dy() > maxTextureEdge {
+		return nil, fmt.Errorf("texture is %dx%d, larger than %d", b.Dx(), b.Dy(), maxTextureEdge)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return &texture{img: img, data: buf.Bytes()}, nil
+}
+
+// isPNG reports whether data starts with the PNG signature.
+func isPNG(data []byte) bool {
+	return bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n"))
 }
 
 // decodeTexture decodes encoded image bytes, bounding the edge length first so
 // a hostile header cannot ask for a huge allocation.
 func decodeTexture(data []byte) (image.Image, error) {
-	w, h, err := bedrockskin.ImageDimensions(data)
+	if len(data) == 0 {
+		return nil, errors.New("no image data")
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("not a valid image: %w", err)
 	}
-	if w > maxTextureEdge || h > maxTextureEdge {
-		return nil, fmt.Errorf("texture is %dx%d, larger than %d", w, h, maxTextureEdge)
+	if cfg.Width > maxTextureEdge || cfg.Height > maxTextureEdge {
+		return nil, fmt.Errorf("texture is %dx%d, larger than %d", cfg.Width, cfg.Height, maxTextureEdge)
 	}
-	return bedrockskin.DecodeImage(data)
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("not a valid image: %w", err)
+	}
+	return img, nil
 }
 
-// mewSkinImage decodes MEW's embedded fallback skin once.
-func mewSkinImage() image.Image {
+// mewSkinTexture decodes MEW's embedded fallback skin once.
+func mewSkinTexture() *texture {
 	mewDefaultSkinOnce.Do(func() {
-		img, err := decodeTexture(mewDefaultSkin)
+		t, err := newTexture(mewDefaultSkin)
 		if err != nil {
 			debugLogf("mew: embedded default skin: %v", err)
 			return
 		}
-		mewDefaultSkinImg = img
+		mewDefaultSkinTex = t
 	})
-	return mewDefaultSkinImg
+	return mewDefaultSkinTex
 }
 
 var (
 	placeholderOnce sync.Once
-	placeholderImg  image.Image
+	placeholderTex  *texture
 )
 
 // placeholderTexture is MEW's own "missing texture" marker: a magenta and black
@@ -395,7 +440,7 @@ var (
 // cache is empty and offline, or right after it was cleared - so the equipment
 // stays visible and obviously provisional instead of silently disappearing. It
 // is generated, never bundled game art.
-func placeholderTexture() image.Image {
+func placeholderTexture() *texture {
 	placeholderOnce.Do(func() {
 		const size = 16
 		img := image.NewNRGBA(image.Rect(0, 0, size, size))
@@ -410,18 +455,18 @@ func placeholderTexture() image.Image {
 				}
 			}
 		}
-		placeholderImg = img
+		placeholderTex, _ = textureFromImage(img)
 	})
-	return placeholderImg
+	return placeholderTex
 }
 
-// orPlaceholder returns img when a texture resolved, else the missing-texture
-// marker, so a render never silently drops a requested piece.
-func orPlaceholder(img image.Image) image.Image {
-	if img == nil {
+// orPlaceholder returns t when a texture resolved, else the missing-texture
+// marker, so the viewer never silently drops a requested piece.
+func orPlaceholder(t *texture) *texture {
+	if t == nil {
 		return placeholderTexture()
 	}
-	return img
+	return t
 }
 
 // --- model detection ---
@@ -505,19 +550,33 @@ func isHandEquipped(name string) bool {
 	return handEquippedRe.MatchString(name) || handEquippedNames[name]
 }
 
-// --- options ---
+// heldFor resolves one hand's item.
+func (a *App) heldFor(dir string, item string) (HeldTexture, error) {
+	name := strings.TrimSpace(item)
+	if name == "" {
+		return HeldTexture{}, nil
+	}
+	if !itemNameRe.MatchString(name) {
+		return HeldTexture{}, fmt.Errorf("invalid item name: %s", item)
+	}
+	return HeldTexture{
+		Item: orPlaceholder(a.itemTexture(dir, name)).dataURI(),
+		Flat: !isHandEquipped(name),
+	}, nil
+}
 
-// renderOptions turns a request into library options, validating and clamping
+// --- endpoints ---
+
+// GetPlayerTextures resolves every texture the player wears, validating
 // everything that came from the frontend.
-func (a *App) renderOptions(req RenderRequest) (bedrockskin.Options, error) {
+func (a *App) GetPlayerTextures(req PlayerRequest) (PlayerTextures, error) {
 	dir, err := a.packDirFor(req.Base, req.Pack)
 	if err != nil {
-		return bedrockskin.Options{}, err
+		return PlayerTextures{}, err
 	}
-
 	skin := a.skinFor(packSkinKey(req.Base, req.Pack), dir)
 	if skin == nil {
-		return bedrockskin.Options{}, bedrockskin.ErrNoTexture
+		return PlayerTextures{}, fmt.Errorf("no skin texture")
 	}
 
 	model := strings.ToLower(strings.TrimSpace(req.Model))
@@ -527,37 +586,12 @@ func (a *App) renderOptions(req RenderRequest) (bedrockskin.Options, error) {
 	switch model {
 	case "auto", "wide", "slim":
 	default:
-		return bedrockskin.Options{}, fmt.Errorf("unknown model: %s", req.Model)
-	}
-	identifier := ""
-	if model == "slim" || (model == "auto" && isSlimSkin(skin)) {
-		identifier = "geometry.humanoid.customSlim"
+		return PlayerTextures{}, fmt.Errorf("unknown model: %s", req.Model)
 	}
 
-	view, err := bedrockskin.ParseView(req.View)
-	if err != nil {
-		return bedrockskin.Options{}, err
-	}
-	angle, err := bedrockskin.ParseAngle(req.Angle)
-	if err != nil {
-		return bedrockskin.Options{}, err
-	}
-	parts, err := validateParts(req.Parts)
-	if err != nil {
-		return bedrockskin.Options{}, err
-	}
-
-	opts := bedrockskin.Options{
-		Texture:    skin,
-		Identifier: identifier,
-		View:       view,
-		Angle:      angle,
-		Size:       clampInt(req.Size, 32, 1024, 512),
-		Scale:      bedrockskin.Scale{Model: req.ModelSize, Parts: parts},
-		HideSkin:   req.HideSkin,
-	}
-	if req.Camera != nil {
-		opts.Camera = cameraFromRequest(req.Camera)
+	out := PlayerTextures{
+		Skin: skin.dataURI(),
+		Slim: model == "slim" || (model == "auto" && isSlimSkin(skin.img)),
 	}
 
 	material := strings.ToLower(strings.TrimSpace(req.Material))
@@ -566,306 +600,32 @@ func (a *App) renderOptions(req RenderRequest) (bedrockskin.Options, error) {
 	}
 	if material != "" {
 		if !vanillaArmorMaterials[material] {
-			return bedrockskin.Options{}, fmt.Errorf("unknown armor material: %s", req.Material)
+			return PlayerTextures{}, fmt.Errorf("unknown armor material: %s", req.Material)
 		}
-		opts.Armor = bedrockskin.ArmorSet(
-			orPlaceholder(a.armorLayer(dir, material, 1)),
-			orPlaceholder(a.armorLayer(dir, material, 2)),
-		)
+		out.Layer1 = orPlaceholder(a.armorLayer(dir, material, 1)).dataURI()
+		out.Layer2 = orPlaceholder(a.armorLayer(dir, material, 2)).dataURI()
 	}
 	if req.Elytra {
-		opts.Armor.Elytra = orPlaceholder(a.elytraTexture(dir))
+		out.Elytra = orPlaceholder(a.elytraTexture(dir)).dataURI()
 	}
-
-	if opts.RightHand, err = a.heldFor(dir, req.Right); err != nil {
-		return bedrockskin.Options{}, err
+	if out.Right, err = a.heldFor(dir, req.Right); err != nil {
+		return PlayerTextures{}, err
 	}
-	if opts.LeftHand, err = a.heldFor(dir, req.Left); err != nil {
-		return bedrockskin.Options{}, err
-	}
-
-	// Animation is applied by the frame paths (RenderSkin frames, RenderSkinGIF);
-	// a posed still is only ever drawn with the animation's shared camera, so it
-	// goes through renderAnimationFrame rather than a per-pose here.
-	return opts, nil
-}
-
-// cameraFromRequest validates a request's explicit camera, or nil when it has
-// none.
-func cameraFromRequest(c *CameraRequest) *bedrockskin.Camera {
-	if c == nil {
-		return nil
-	}
-	return &bedrockskin.Camera{
-		Yaw:    c.Yaw,
-		Pitch:  clampFloat(c.Pitch, -89, 89),
-		FOV:    nonzeroClamp(c.FOV, 10, 90),
-		Margin: nonzeroClamp(c.Margin, 0.3, 4),
-	}
-}
-
-// heldFor turns a hand request into library held-item options.
-func (a *App) heldFor(dir string, h HandRequest) (bedrockskin.Held, error) {
-	name := strings.TrimSpace(h.Item)
-	if name == "" {
-		return bedrockskin.Held{}, nil
-	}
-	if !itemNameRe.MatchString(name) {
-		return bedrockskin.Held{}, fmt.Errorf("invalid item name: %s", h.Item)
-	}
-	return bedrockskin.Held{
-		Item:   orPlaceholder(a.itemTexture(dir, name)),
-		Flat:   !isHandEquipped(name),
-		Adjust: h.Adjust,
-	}, nil
-}
-
-// validateParts checks a request's part scales against the six body parts,
-// returning the map unchanged when valid.
-func validateParts(parts map[string]float64) (map[string]float64, error) {
-	for name := range parts {
-		if !allowedRenderParts[strings.ToLower(strings.TrimSpace(name))] {
-			return nil, fmt.Errorf("unknown body part: %s", name)
-		}
-	}
-	return parts, nil
-}
-
-// animationFor resolves an animation name: a built-in motion or one of the
-// bundled example animations. A blank name returns nil, meaning a still.
-func animationFor(name string) (bedrockskin.Animator, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, nil
-	}
-	if m, err := bedrockskin.ParseMotion(name); err == nil {
-		return m, nil
-	}
-	if anim := bedrockskin.ExampleAnimations()[name]; anim != nil {
-		return anim, nil
-	}
-	return nil, fmt.Errorf("unknown animation: %s", name)
-}
-
-// --- endpoints ---
-
-// RenderSkin renders one PNG of the player with the requested equipment,
-// returning it as a data URI. With Animation set it draws Frame of that
-// animation, framed by the one camera the whole animation shares, so whole-body
-// motion keeps its place on screen.
-func (a *App) RenderSkin(req RenderRequest) (string, error) {
-	key := a.renderCacheKey(req)
-	if uri, ok := a.renderCache.get(key); ok {
-		return uri, nil
-	}
-	png, err := func() ([]byte, error) {
-		if strings.TrimSpace(req.Animation) != "" {
-			return a.renderAnimationFrame(req)
-		}
-		opts, err := a.renderOptions(req)
-		if err != nil {
-			return nil, err
-		}
-		return opts.RenderPNG()
-	}()
-	if err != nil {
-		return "", err
-	}
-	uri := pngDataURI(png)
-	a.renderCache.put(key, uri)
-	return uri, nil
-}
-
-// renderAnimationFrame draws one frame of an animation with the animation's
-// shared camera - the mid-drag still the live view uses.
-func (a *App) renderAnimationFrame(req RenderRequest) ([]byte, error) {
-	frames, err := a.preparedFrames(req)
-	if err != nil {
-		return nil, err
-	}
-	img := frames.Draw(req.Frame, clampInt(req.Size, 32, 1024, 512), cameraFromRequest(req.Camera))
-	return bedrockskin.EncodePNG(img)
-}
-
-// preparedFrames returns the animation's prepared frames, building and caching
-// them on the first request. The camera is refit per draw, so it is not part of
-// the cache key.
-func (a *App) preparedFrames(req RenderRequest) (*bedrockskin.Frames, error) {
-	anim, err := animationFor(req.Animation)
-	if err != nil {
-		return nil, err
-	}
-	if anim == nil {
-		return nil, fmt.Errorf("no animation requested")
-	}
-	key := a.framesCacheKey(req)
-	if set := a.framesCache.get(key); set != nil {
-		return set, nil
-	}
-	opts, err := a.renderOptions(req)
-	if err != nil {
-		return nil, err
-	}
-	set, err := bedrockskin.PrepareFrames(bedrockskin.AnimationOptions{
-		Options:   opts,
-		Animation: anim,
-		FPS:       clampInt(req.FPS, 1, 30, 15),
-		Frames:    clampInt(req.Frames, 0, 120, 0),
-	})
-	if err != nil {
-		return nil, err
-	}
-	a.framesCache.put(key, set)
-	return set, nil
-}
-
-// RenderSkinFrames renders every frame of an animation, each framed by one
-// camera, as PNG data URIs. The live view loops these.
-func (a *App) RenderSkinFrames(req RenderRequest) ([]string, error) {
-	anim, err := animationFor(req.Animation)
-	if err != nil {
-		return nil, err
-	}
-	if anim == nil {
-		return nil, fmt.Errorf("no animation requested")
-	}
-	frames, err := a.preparedFrames(req)
-	if err != nil {
-		return nil, err
-	}
-	// The whole clip is re-drawn for the camera it was requested at, then
-	// encoded. Drawing reuses the prepared poses (no per-frame re-posing) and
-	// the PNG encode runs across cores, so reloading a clip after a rotation is
-	// a short burst instead of a long serial one.
-	n := frames.Len()
-	out := make([]string, n)
-	if n == 0 {
-		return out, nil
-	}
-	size := clampInt(req.Size, 32, 1024, 512)
-	cam := cameraFromRequest(req.Camera)
-	workers := min(runtime.GOMAXPROCS(0), n)
-	next := make(chan int, n)
-	for i := range out {
-		next <- i
-	}
-	close(next)
-	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		fErr error
-	)
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := range next {
-				png, err := bedrockskin.EncodePNG(frames.Draw(i, size, cam))
-				if err != nil {
-					mu.Lock()
-					if fErr == nil {
-						fErr = err
-					}
-					mu.Unlock()
-					continue
-				}
-				out[i] = pngDataURI(png)
-			}
-		}()
-	}
-	wg.Wait()
-	if fErr != nil {
-		return nil, fErr
+	if out.Left, err = a.heldFor(dir, req.Left); err != nil {
+		return PlayerTextures{}, err
 	}
 	return out, nil
 }
 
-// RenderSkinGIF renders an animation as a looping GIF data URI, for export.
-func (a *App) RenderSkinGIF(req RenderRequest) (string, error) {
-	anim, err := animationFor(req.Animation)
-	if err != nil {
-		return "", err
-	}
-	if anim == nil {
-		return "", fmt.Errorf("no animation requested")
-	}
-	opts, err := a.renderOptions(req)
-	if err != nil {
-		return "", err
-	}
-	if opts.Size > 512 {
-		opts.Size = 512
-	}
-	gif, err := bedrockskin.RenderGIF(bedrockskin.AnimationOptions{
-		Options:   opts,
-		Animation: anim,
-		FPS:       clampInt(req.FPS, 1, 30, 15),
-		Frames:    clampInt(req.Frames, 0, 120, 0),
-	})
-	if err != nil {
-		return "", err
-	}
-	return "data:image/gif;base64," + base64.StdEncoding.EncodeToString(gif), nil
-}
-
-// ListAnimations returns the motions first, then the bundled example
-// animations sorted by name.
-func (a *App) ListAnimations() []string {
-	motions := bedrockskin.Motions()
-	out := make([]string, 0, len(motions)+len(bedrockskin.ExampleAnimations()))
-	for _, m := range motions {
-		out = append(out, string(m))
-	}
-	examples := bedrockskin.ExampleAnimations()
-	names := make([]string, 0, len(examples))
-	for name := range examples {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return append(out, names...)
-}
-
-// RenderItem renders one item on its own, extruded, front or iso. base is the
-// pack's folder, as in RenderRequest.
-func (a *App) RenderItem(pack string, base string, item string, angle string, size int) (string, error) {
+// GetItemTexture returns one item's sprite as a PNG data URI: the pack's,
+// else vanilla's, else the missing-texture marker. base is the pack's folder,
+// as in PlayerRequest.
+func (a *App) GetItemTexture(pack string, base string, item string) (string, error) {
 	dir, err := a.packDirFor(base, pack)
 	if err != nil {
 		return "", err
 	}
-	img := orPlaceholder(a.itemTexture(dir, strings.TrimSpace(item)))
-	parsedAngle, err := bedrockskin.ParseAngle(angle)
-	if err != nil {
-		return "", err
-	}
-	out, err := bedrockskin.RenderItem(bedrockskin.ItemOptions{
-		Item:  img,
-		Angle: parsedAngle,
-		Size:  clampInt(size, 32, 512, 256),
-	})
-	if err != nil {
-		return "", err
-	}
-	png, err := bedrockskin.EncodePNG(out)
-	if err != nil {
-		return "", err
-	}
-	return pngDataURI(png), nil
-}
-
-// RenderItemSpin renders one item turning once, as a GIF data URI.
-func (a *App) RenderItemSpin(pack string, base string, item string, size int) (string, error) {
-	dir, err := a.packDirFor(base, pack)
-	if err != nil {
-		return "", err
-	}
-	img := orPlaceholder(a.itemTexture(dir, strings.TrimSpace(item)))
-	gif, err := bedrockskin.RenderItemGIF(bedrockskin.ItemAnimationOptions{
-		ItemOptions: bedrockskin.ItemOptions{Item: img, Size: clampInt(size, 32, 512, 256)},
-	})
-	if err != nil {
-		return "", err
-	}
-	return "data:image/gif;base64," + base64.StdEncoding.EncodeToString(gif), nil
+	return orPlaceholder(a.itemTexture(dir, strings.TrimSpace(item))).dataURI(), nil
 }
 
 // SaveRender writes a rendered data URI to a file the user picks. A cancelled
@@ -903,21 +663,9 @@ func (a *App) SaveRender(dataURI string, suggestedName string) error {
 
 // --- helpers ---
 
-// pngDataURI encodes an image as a PNG data URI.
+// pngDataURI encodes PNG bytes as a data URI.
 func pngDataURI(png []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
-}
-
-// imageToDataURI encodes a decoded image as a PNG data URI, or "" for nil.
-func imageToDataURI(img image.Image) string {
-	if img == nil {
-		return ""
-	}
-	png, err := bedrockskin.EncodePNG(img)
-	if err != nil {
-		return ""
-	}
-	return pngDataURI(png)
 }
 
 // splitDataURI separates a base64 data URI's mime type from its bytes.
@@ -938,184 +686,4 @@ func splitDataURI(uri string) (string, []byte, error) {
 		return "", nil, err
 	}
 	return strings.TrimSuffix(meta, ";base64"), data, nil
-}
-
-// clampInt clamps v into [lo, hi], with zero meaning def.
-func clampInt(v, lo, hi, def int) int {
-	if v == 0 {
-		v = def
-	}
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
-// clampFloat clamps v into [lo, hi].
-func clampFloat(v, lo, hi float64) float64 {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
-// nonzeroClamp clamps v when it is set, leaving zero to mean "the preset".
-func nonzeroClamp(v, lo, hi float64) float64 {
-	if v == 0 {
-		return 0
-	}
-	return clampFloat(v, lo, hi)
-}
-
-// --- render cache ---
-
-// renderCacheKey is a request plus the mtimes of the pack files it read and the
-// vanilla generation, so an edited texture or newly downloaded vanilla texture
-// re-renders instead of serving a render drawn while it was missing.
-func (a *App) renderCacheKey(req RenderRequest) string {
-	raw, _ := json.Marshal(req)
-	sig := a.requestSignature(req)
-	return fmt.Sprintf("%s\x00%s\x00v%d", raw, sig, vanillaGeneration())
-}
-
-// framesCacheKey identifies a prepared animation: the appearance and the
-// animation itself, not the camera, frame or size, which a draw supplies.
-func (a *App) framesCacheKey(req RenderRequest) string {
-	req.Camera = nil
-	req.Frame = 0
-	req.Size = 0
-	raw, _ := json.Marshal(req)
-	return fmt.Sprintf("%s\x00%s\x00v%d", raw, a.requestSignature(req), vanillaGeneration())
-}
-
-// requestSignature fingerprints the pack and default-skin files a request uses.
-func (a *App) requestSignature(req RenderRequest) string {
-	var b strings.Builder
-	key := packSkinKey(req.Base, req.Pack)
-	dir, _ := a.packDirFor(req.Base, req.Pack)
-	b.WriteString(a.previewSignature(key))
-	statInto(&b, chosenSkinPath(key))
-	statInto(&b, skinPath(dir))
-	statInto(&b, defaultSkinPath())
-	material := strings.ToLower(strings.TrimSpace(req.Material))
-	if material == "none" {
-		material = ""
-	}
-	if material != "" {
-		statInto(&b, packArmorPath(dir, material, 1))
-		statInto(&b, packArmorPath(dir, material, 2))
-	}
-	if req.Elytra {
-		statInto(&b, packElytraPath(dir))
-	}
-	if req.Right.Item != "" {
-		statInto(&b, packItemPath(dir, req.Right.Item))
-	}
-	if req.Left.Item != "" {
-		statInto(&b, packItemPath(dir, req.Left.Item))
-	}
-	return b.String()
-}
-
-func statInto(b *strings.Builder, path string) {
-	if path == "" {
-		return
-	}
-	st, err := os.Stat(path)
-	if err != nil {
-		fmt.Fprintf(b, "%s:absent;", path)
-		return
-	}
-	fmt.Fprintf(b, "%s:%d:%d;", path, st.Size(), st.ModTime().UnixNano())
-}
-
-// framesCache keeps the most recent prepared animation. The live view shows one
-// appearance at a time, so a single slot is enough to draw every camera move
-// from the one frame set instead of rebuilding it.
-type framesCache struct {
-	mu  sync.Mutex
-	key string
-	set *bedrockskin.Frames
-}
-
-func (c *framesCache) get(key string) *bedrockskin.Frames {
-	if c == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.key == key {
-		return c.set
-	}
-	return nil
-}
-
-func (c *framesCache) put(key string, set *bedrockskin.Frames) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.key, c.set = key, set
-}
-
-// renderLRU is a small least-recently-used cache of rendered stills, so memory
-// stays flat while the user drags the camera.
-type renderLRU struct {
-	mu    sync.Mutex
-	max   int
-	items map[string]string
-	order []string
-}
-
-func newRenderLRU(max int) *renderLRU {
-	return &renderLRU{max: max, items: make(map[string]string, max)}
-}
-
-func (c *renderLRU) get(key string) (string, bool) {
-	if c == nil {
-		return "", false
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	v, ok := c.items[key]
-	if !ok {
-		return "", false
-	}
-	c.touch(key)
-	return v, true
-}
-
-func (c *renderLRU) put(key string, value string) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if _, ok := c.items[key]; !ok {
-		c.order = append(c.order, key)
-	}
-	c.items[key] = value
-	for len(c.order) > c.max {
-		oldest := c.order[0]
-		c.order = c.order[1:]
-		delete(c.items, oldest)
-	}
-}
-
-// touch moves key to the newest end of the order.
-func (c *renderLRU) touch(key string) {
-	for i, k := range c.order {
-		if k == key {
-			c.order = append(c.order[:i], c.order[i+1:]...)
-			c.order = append(c.order, key)
-			return
-		}
-	}
 }
