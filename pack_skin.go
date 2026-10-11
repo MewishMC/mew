@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"image"
 	"os"
 	"path/filepath"
 )
@@ -14,9 +13,8 @@ import (
 
 // previewSkin is a skin being previewed for one pack.
 type previewSkin struct {
-	data []byte
-	img  image.Image
-	gen  int
+	tex *texture
+	gen int
 }
 
 // packSkinKey names a pack's chosen skin: its folder name for an installed
@@ -43,7 +41,7 @@ func chosenSkinPath(key string) string {
 
 // PreviewPackSkin shows a skin on one pack's player until the viewer closes
 // or the skin is saved. The data URI must decode to a skin-sized image.
-// base is the pack's folder, as in RenderRequest.
+// base is the pack's folder, as in PlayerRequest.
 func (a *App) PreviewPackSkin(packName string, base string, dataURI string) error {
 	key := packSkinKey(base, packName)
 	if key == "" {
@@ -53,11 +51,11 @@ func (a *App) PreviewPackSkin(packName string, base string, dataURI string) erro
 	if err != nil {
 		return err
 	}
-	img, err := decodeTexture(data)
+	tex, err := newTexture(data)
 	if err != nil {
 		return fmt.Errorf("not a skin image: %w", err)
 	}
-	if b := img.Bounds(); b.Dx() < 64 || b.Dy() < 32 {
+	if b := tex.img.Bounds(); b.Dx() < 64 || b.Dy() < 32 {
 		return fmt.Errorf("skin is %dx%d, smaller than 64x32", b.Dx(), b.Dy())
 	}
 	a.previewMu.Lock()
@@ -66,7 +64,7 @@ func (a *App) PreviewPackSkin(packName string, base string, dataURI string) erro
 		a.previewSkins = map[string]previewSkin{}
 	}
 	a.previewGen++
-	a.previewSkins[key] = previewSkin{data: data, img: img, gen: a.previewGen}
+	a.previewSkins[key] = previewSkin{tex: tex, gen: a.previewGen}
 	return nil
 }
 
@@ -97,7 +95,7 @@ func (a *App) SavePackSkin(packName string, base string) error {
 	}
 	// Write then rename, so a render never reads a half-written skin.
 	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, prev.data, 0644); err != nil {
+	if err := os.WriteFile(tmp, prev.tex.data, 0644); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, p); err != nil {
@@ -140,19 +138,8 @@ func (a *App) HasPackSkin(packName string, base string) bool {
 
 // previewSkin returns the skin being previewed under a pack's skin key, or
 // nil.
-func (a *App) previewSkin(key string) image.Image {
+func (a *App) previewSkin(key string) *texture {
 	a.previewMu.Lock()
 	defer a.previewMu.Unlock()
-	return a.previewSkins[key].img
-}
-
-// previewSignature is part of a render's cache key: which preview, if any,
-// it was drawn with.
-func (a *App) previewSignature(key string) string {
-	a.previewMu.Lock()
-	defer a.previewMu.Unlock()
-	if p, ok := a.previewSkins[key]; ok {
-		return fmt.Sprintf("preview:%d;", p.gen)
-	}
-	return ""
+	return a.previewSkins[key].tex
 }

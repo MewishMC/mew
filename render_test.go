@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	bedrockskin "github.com/THEBOSS9345/bedrock-skin-go"
 )
 
 // solidPNG encodes a solid-color PNG, the procedural texture the render tests
@@ -106,16 +104,16 @@ func TestResolversPreferPackThenVanilla(t *testing.T) {
 	writeFile(t, filepath.Join(root, "pack", "textures", "items", "diamond_sword.png"), packSword)
 	writeFile(t, filepath.Join(vanillaCacheDir(), "textures", "items", "iron_sword.png"), vanillaSword)
 
-	if got := a.armorLayer(a.getPackDir("pack"), "diamond", 1); got == nil || !isRed(got) {
+	if got := a.armorLayer(a.getPackDir("pack"), "diamond", 1); got == nil || !isRed(got.img) {
 		t.Errorf("layer 1 should come from the pack")
 	}
-	if got := a.armorLayer(a.getPackDir("pack"), "diamond", 2); got == nil || !isGreen(got) {
+	if got := a.armorLayer(a.getPackDir("pack"), "diamond", 2); got == nil || !isGreen(got.img) {
 		t.Errorf("layer 2 should fall back to vanilla")
 	}
-	if got := a.itemTexture(a.getPackDir("pack"), "diamond_sword"); got == nil || !isBlue(got) {
+	if got := a.itemTexture(a.getPackDir("pack"), "diamond_sword"); got == nil || !isBlue(got.img) {
 		t.Errorf("diamond_sword should come from the pack")
 	}
-	if got := a.itemTexture(a.getPackDir("pack"), "iron_sword"); got == nil || !isYellow(got) {
+	if got := a.itemTexture(a.getPackDir("pack"), "iron_sword"); got == nil || !isYellow(got.img) {
 		t.Errorf("iron_sword should fall back to vanilla")
 	}
 	if got := a.itemTexture(a.getPackDir("pack"), "diamond_hoe"); got != nil {
@@ -149,17 +147,17 @@ func TestGoldenAppleUsesBedrockTextureName(t *testing.T) {
 	root := a.getResourcePacksPath()
 	writeFile(t, filepath.Join(vanillaCacheDir(), "textures", "items", "apple_golden.png"), solidPNG(t, 16, 16, color.NRGBA{255, 255, 0, 255}))
 
-	if got := a.itemTexture("", "golden_apple"); got == nil || !isYellow(got) {
+	if got := a.itemTexture("", "golden_apple"); got == nil || !isYellow(got.img) {
 		t.Fatal("golden_apple should fall back to vanilla apple_golden.png")
 	}
 	// A pack that names the sprite the friendly way still wins.
 	writeFile(t, filepath.Join(root, "pack", "textures", "items", "golden_apple.png"), solidPNG(t, 16, 16, color.NRGBA{255, 0, 0, 255}))
-	if got := a.itemTexture(a.getPackDir("pack"), "golden_apple"); got == nil || !isRed(got) {
+	if got := a.itemTexture(a.getPackDir("pack"), "golden_apple"); got == nil || !isRed(got.img) {
 		t.Fatal("pack's golden_apple.png should be preferred")
 	}
 	// And a pack using Bedrock's own name works too.
 	writeFile(t, filepath.Join(root, "bedrockPack", "textures", "items", "apple_golden.png"), solidPNG(t, 16, 16, color.NRGBA{0, 0, 255, 255}))
-	if got := a.itemTexture(a.getPackDir("bedrockPack"), "golden_apple"); got == nil || !isBlue(got) {
+	if got := a.itemTexture(a.getPackDir("bedrockPack"), "golden_apple"); got == nil || !isBlue(got.img) {
 		t.Fatal("pack's apple_golden.png should be found via the alias")
 	}
 }
@@ -171,13 +169,13 @@ func TestBedrockTierNamesNormalized(t *testing.T) {
 	writeFile(t, filepath.Join(vanillaCacheDir(), "textures", "items", "gold_hoe.png"), solidPNG(t, 16, 16, color.NRGBA{255, 255, 0, 255}))
 	writeFile(t, filepath.Join(vanillaCacheDir(), "textures", "items", "wood_axe.png"), solidPNG(t, 16, 16, color.NRGBA{0, 255, 0, 255}))
 
-	if got := a.itemTexture("", "golden_hoe"); got == nil || !isYellow(got) {
+	if got := a.itemTexture("", "golden_hoe"); got == nil || !isYellow(got.img) {
 		t.Fatal("golden_hoe should resolve to vanilla gold_hoe.png")
 	}
-	if got := a.itemTexture("", "wooden_axe"); got == nil || !isGreen(got) {
+	if got := a.itemTexture("", "wooden_axe"); got == nil || !isGreen(got.img) {
 		t.Fatal("wooden_axe should resolve to vanilla wood_axe.png")
 	}
-	if got := a.itemTexture("", "gold_hoe"); got == nil || !isYellow(got) {
+	if got := a.itemTexture("", "gold_hoe"); got == nil || !isYellow(got.img) {
 		t.Fatal("the canonical gold_hoe should fetch directly")
 	}
 }
@@ -197,7 +195,7 @@ func TestItemTextureUnknownNameNeverFetches(t *testing.T) {
 	}
 }
 
-func TestRenderSkinBasics(t *testing.T) {
+func TestPlayerTexturesBasics(t *testing.T) {
 	a := testApp(t)
 	root := a.getResourcePacksPath()
 	skin := solidPNG(t, 64, 64, color.NRGBA{120, 120, 120, 255})
@@ -205,21 +203,32 @@ func TestRenderSkinBasics(t *testing.T) {
 	writeFile(t, filepath.Join(root, "armorOnly", "textures", "models", "armor", "diamond_1.png"), skin)
 	writeFile(t, filepath.Join(root, "armorOnly", "textures", "models", "armor", "diamond_2.png"), skin)
 
-	for _, req := range []RenderRequest{
-		{Pack: "withSkin", Size: 64},
-		{Pack: "armorOnly", Material: "diamond", Size: 64},
-		{Size: 64},
+	for _, req := range []PlayerRequest{
+		{Pack: "withSkin"},
+		{Pack: "armorOnly", Material: "diamond"},
+		{},
 	} {
-		uri, err := a.RenderSkin(req)
+		tex, err := a.GetPlayerTextures(req)
 		if err != nil {
 			t.Fatalf("%+v: %v", req, err)
 		}
-		if !strings.HasPrefix(uri, "data:image/png;base64,") {
-			t.Fatalf("%+v: not a PNG data URI: %q", req, uri)
+		if !strings.HasPrefix(tex.Skin, "data:image/png;base64,") {
+			t.Fatalf("%+v: skin is not a PNG data URI", req)
 		}
-		if got := decodeDataURI(t, uri).Bounds().Dx(); got != 64 {
-			t.Fatalf("%+v: size %d, want 64", req, got)
+		if got := decodeDataURI(t, tex.Skin).Bounds().Dx(); got != 64 {
+			t.Fatalf("%+v: skin is %dpx wide, want 64", req, got)
 		}
+		if (req.Material != "") != (tex.Layer1 != "" && tex.Layer2 != "") {
+			t.Fatalf("%+v: armor layers %v/%v", req, tex.Layer1 != "", tex.Layer2 != "")
+		}
+	}
+	// A pack's PNG reaches the viewer byte for byte, as the game reads it.
+	tex, err := a.GetPlayerTextures(PlayerRequest{Pack: "withSkin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(dataURIBytes(t, tex.Skin), skin) {
+		t.Error("the pack's skin PNG should be passed through unchanged")
 	}
 }
 
@@ -234,11 +243,11 @@ func TestPackSkinPreviewAndSave(t *testing.T) {
 	writeFile(t, filepath.Join(root, "two", "textures", "entity", "steve.png"), blue)
 	render := func(a *App, pack string) string {
 		t.Helper()
-		uri, err := a.RenderSkin(RenderRequest{Pack: pack, Size: 64})
+		tex, err := a.GetPlayerTextures(PlayerRequest{Pack: pack})
 		if err != nil {
 			t.Fatal(err)
 		}
-		return uri
+		return tex.Skin
 	}
 	before := render(a, "one")
 	red := "data:image/png;base64," + base64.StdEncoding.EncodeToString(solidPNG(t, 64, 64, color.NRGBA{255, 0, 0, 255}))
@@ -304,243 +313,51 @@ func TestPackSkinPreviewAndSave(t *testing.T) {
 
 func TestMissingEquipmentFallsBackToPlaceholder(t *testing.T) {
 	a := testApp(t) // empty vanilla cache, network disabled
-	opts, err := a.renderOptions(RenderRequest{
+	tex, err := a.GetPlayerTextures(PlayerRequest{
 		Material: "diamond",
-		Right:    HandRequest{Item: "diamond_sword"},
-		Size:     64,
+		Elytra:   true,
+		Right:    "diamond_sword",
+		Left:     "bread",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opts.Armor.Helmet == nil || opts.Armor.Leggings == nil {
-		t.Error("missing armor should fall back to the placeholder, not vanish")
-	}
-	if opts.RightHand.Item == nil {
-		t.Error("a missing held item should fall back to the placeholder")
-	}
-	if p := placeholderTexture(); p == nil || p.Bounds().Dx() != 16 {
+	p := placeholderTexture()
+	if p == nil || p.img.Bounds().Dx() != 16 {
 		t.Fatalf("placeholder should be a 16px image, got %v", p)
 	}
-}
-
-func TestRenderCacheInvalidatedWhenVanillaArrives(t *testing.T) {
-	a := testApp(t)
-	req := RenderRequest{Material: "diamond", Right: HandRequest{Item: "diamond_sword"}, Size: 64}
-	before := a.renderCacheKey(req)
-	framesBefore := a.framesCacheKey(RenderRequest{Animation: "walk"})
-
-	// What a completed download (or a cache clear) does.
-	vanillaState.mu.Lock()
-	vanillaState.generation++
-	vanillaState.mu.Unlock()
-
-	if after := a.renderCacheKey(req); after == before {
-		t.Error("a newly arrived vanilla texture should invalidate the still cache")
-	}
-	if after := a.framesCacheKey(RenderRequest{Animation: "walk"}); after == framesBefore {
-		t.Error("a newly arrived vanilla texture should invalidate the frame cache")
-	}
-}
-
-func TestElytraReplacesChestplate(t *testing.T) {
-	// The library drops the chestplate under an elytra; the service relies on
-	// it, so pin the contract down.
-	skin := onePxImage(color.NRGBA{120, 120, 120, 255})
-	layer1 := onePxImage(color.NRGBA{200, 0, 0, 255})
-	layer2 := onePxImage(color.NRGBA{0, 200, 0, 255})
-	elytra := onePxImage(color.NRGBA{0, 0, 200, 255})
-
-	both := bedrockskin.Options{Texture: skin, Size: 64}
-	both.Armor = bedrockskin.ArmorSet(layer1, layer2)
-	both.Armor.Elytra = elytra
-
-	alone := bedrockskin.Options{Texture: skin, Size: 64}
-	alone.Armor = bedrockskin.ArmorSet(layer1, layer2)
-	alone.Armor.Chestplate = nil
-	alone.Armor.Elytra = elytra
-
-	a, err := both.RenderPNG()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := alone.RenderPNG()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(a, b) {
-		t.Error("chestplate+elytra should render the same as the elytra alone")
-	}
-}
-
-func onePxImage(c color.NRGBA) image.Image {
-	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
-	img.SetNRGBA(0, 0, c)
-	return img
-}
-
-func TestHideSkinWithoutEquipmentIsEmpty(t *testing.T) {
-	a := testApp(t)
-	_, err := a.RenderSkin(RenderRequest{HideSkin: true, Size: 64})
-	if !errors.Is(err, bedrockskin.ErrEmptyView) {
-		t.Fatalf("want ErrEmptyView, got %v", err)
-	}
-}
-
-func TestRenderSkinFrames(t *testing.T) {
-	a := testApp(t)
-	frames, err := a.RenderSkinFrames(RenderRequest{Animation: "walk", FPS: 10, Frames: 4, Size: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(frames) != 4 {
-		t.Fatalf("got %d frames, want 4", len(frames))
-	}
-	if frames[0] == frames[1] {
-		t.Error("walk frames should differ")
-	}
-
-	if _, err := a.RenderSkinFrames(RenderRequest{Animation: "not.an.animation", Size: 64}); err == nil {
-		t.Error("expected an error for an unknown animation")
-	}
-	if _, err := a.RenderSkinFrames(RenderRequest{Size: 64}); err == nil {
-		t.Error("expected an error when no animation is asked for")
-	}
-
-	names := a.ListAnimations()
-	hasWalk, hasDance := false, false
-	for _, n := range names {
-		if n == "walk" {
-			hasWalk = true
-		}
-		if n == "animation.player.dance" {
-			hasDance = true
+	for name, uri := range map[string]string{"layer1": tex.Layer1, "layer2": tex.Layer2, "elytra": tex.Elytra, "right": tex.Right.Item, "left": tex.Left.Item} {
+		if uri != p.dataURI() {
+			t.Errorf("missing %s should fall back to the placeholder, not vanish", name)
 		}
 	}
-	if !hasWalk || !hasDance {
-		t.Errorf("ListAnimations should include walk and the examples, got %v", names)
+	if tex.Right.Flat || !tex.Left.Flat {
+		t.Error("a sword is held upright and bread flat")
+	}
+	if uri, err := a.GetItemTexture("", "", "diamond_sword"); err != nil || uri != p.dataURI() {
+		t.Errorf("GetItemTexture should fall back to the placeholder, got %v", err)
 	}
 }
 
-func TestRenderSkinAnimationStill(t *testing.T) {
+func TestPlayerRequestValidation(t *testing.T) {
 	a := testApp(t)
-	// A still of one animation frame: the live view uses this so a rotating
-	// camera keeps the model animating frame by frame, each frame framed by the
-	// animation's shared camera.
-	uri0, err := a.RenderSkin(RenderRequest{Animation: "walk", Frame: 0, Size: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(uri0, "data:image/png;base64,") {
-		t.Fatalf("not a PNG data URI: %q", uri0)
-	}
-	if got := decodeDataURI(t, uri0).Bounds().Dx(); got != 64 {
-		t.Fatalf("size %d, want 64", got)
-	}
-	uri1, err := a.RenderSkin(RenderRequest{Animation: "walk", Frame: 4, Size: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if uri0 == uri1 {
-		t.Error("walk frames 0 and 4 should differ")
-	}
-	// The frame index wraps, so a loop can keep counting.
-	uri2, err := a.RenderSkin(RenderRequest{Animation: "walk", Frame: 15, Size: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if uri2 != uri0 {
-		t.Error("frame 15 should wrap to walk's first frame")
-	}
-	if _, err := a.RenderSkin(RenderRequest{Animation: "not.an.animation", Size: 64}); err == nil {
-		t.Error("expected an error for an unknown animation")
-	}
-}
-
-// The live view's single-frame still is byte-for-byte the frame
-// RenderSkinFrames draws, so a rotating camera keeps the animation's shared
-// camera instead of the per-pose framing that cancels whole-body motion.
-func TestRenderSkinAnimationFrameMatchesFrames(t *testing.T) {
-	a := testApp(t)
-	cam := &CameraRequest{Yaw: 30, Pitch: 10, FOV: 35, Margin: 1.5}
-	req := RenderRequest{Animation: "animation.player.jumping_jacks", Size: 128, FPS: 20, Camera: cam}
-	frames, err := a.RenderSkinFrames(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(frames) < 3 {
-		t.Fatalf("jumping_jacks produced %d frames", len(frames))
-	}
-	for _, i := range []int{0, 1, len(frames) / 2, len(frames) - 1} {
-		req.Frame = i
-		uri, err := a.RenderSkin(req)
-		if err != nil {
-			t.Fatalf("frame %d: %v", i, err)
-		}
-		if !bytes.Equal(dataURIBytes(t, uri), dataURIBytes(t, frames[i])) {
-			t.Errorf("frame %d drawn alone differs from the batch: the shared camera was lost", i)
-		}
-	}
-	// A scaled model refits identically.
-	req.ModelSize = 1.5
-	frames, err = a.RenderSkinFrames(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Frame = len(frames) / 2
-	uri, err := a.RenderSkin(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(dataURIBytes(t, uri), dataURIBytes(t, frames[req.Frame])) {
-		t.Error("a scaled frame drawn alone differs from the batch")
-	}
-}
-
-func TestCameraMarginChangesSize(t *testing.T) {
-	a := testApp(t)
-	near, err := a.RenderSkin(RenderRequest{Size: 128, Camera: &CameraRequest{Margin: 0.6}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	far, err := a.RenderSkin(RenderRequest{Size: 128, Camera: &CameraRequest{Margin: 3}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if countOpaque(decodeDataURI(t, near)) <= countOpaque(decodeDataURI(t, far)) {
-		t.Error("a smaller margin should draw the figure larger")
-	}
-}
-
-func TestRenderRequestValidation(t *testing.T) {
-	a := testApp(t)
-	if _, err := a.renderOptions(RenderRequest{Pack: "../escape"}); err == nil {
+	if _, err := a.GetPlayerTextures(PlayerRequest{Pack: "../escape"}); err == nil {
 		t.Error("expected a pack name with a path to be rejected")
 	}
-	if _, err := a.renderOptions(RenderRequest{Right: HandRequest{Item: "../../a"}}); err == nil {
+	if _, err := a.GetPlayerTextures(PlayerRequest{Right: "../../a"}); err == nil {
 		t.Error("expected an item name with a path to be rejected")
 	}
-	if _, err := a.renderOptions(RenderRequest{Parts: map[string]float64{"tail": 2}}); err == nil {
-		t.Error("expected an unknown body part to be rejected")
-	}
-	if _, err := a.renderOptions(RenderRequest{Material: "topaz"}); err == nil {
+	if _, err := a.GetPlayerTextures(PlayerRequest{Material: "topaz"}); err == nil {
 		t.Error("expected an unknown armor material to be rejected")
 	}
-
-	opts, err := a.renderOptions(RenderRequest{Size: 5000, Camera: &CameraRequest{Pitch: 200, FOV: 400, Margin: 99}})
-	if err != nil {
-		t.Fatal(err)
+	if _, err := a.GetPlayerTextures(PlayerRequest{Model: "giant"}); err == nil {
+		t.Error("expected an unknown model to be rejected")
 	}
-	if opts.Size != 1024 {
-		t.Errorf("size 5000 should clamp to 1024, got %d", opts.Size)
+	if _, err := a.GetItemTexture("../escape", "", "stick"); err == nil {
+		t.Error("expected GetItemTexture to reject a pack name with a path")
 	}
-	if opts.Camera.Pitch != 89 {
-		t.Errorf("pitch 200 should clamp to 89, got %v", opts.Camera.Pitch)
-	}
-	if opts.Camera.FOV != 90 {
-		t.Errorf("fov 400 should clamp to 90, got %v", opts.Camera.FOV)
-	}
-	if opts.Camera.Margin != 4 {
-		t.Errorf("margin 99 should clamp to 4, got %v", opts.Camera.Margin)
+	if tex, err := a.GetPlayerTextures(PlayerRequest{Model: "slim"}); err != nil || !tex.Slim {
+		t.Errorf("model slim should be slim, got %v", err)
 	}
 }
 
@@ -630,25 +447,27 @@ func isYellow(img image.Image) bool {
 // A server pack renders from the pack cache folder with its own skin, any
 // other folder is refused, and a skin chosen for it is kept apart from an
 // installed pack with the same folder name.
-func TestRenderServerPack(t *testing.T) {
+func TestServerPackTextures(t *testing.T) {
 	a := testApp(t)
 	cache := t.TempDir()
 	a.settings["packCachePath"] = cache
 	writeFile(t, filepath.Join(cache, "srv", "textures", "entity", "steve.png"), solidPNG(t, 64, 64, color.NRGBA{0, 0, 255, 255}))
 	writeFile(t, filepath.Join(a.getResourcePacksPath(), "srv", "textures", "entity", "steve.png"), solidPNG(t, 64, 64, color.NRGBA{0, 255, 0, 255}))
 
-	server, err := a.RenderSkin(RenderRequest{Pack: "srv", Base: cache, Size: 64})
-	if err != nil {
-		t.Fatal(err)
+	skin := func(req PlayerRequest) string {
+		t.Helper()
+		tex, err := a.GetPlayerTextures(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tex.Skin
 	}
-	installed, err := a.RenderSkin(RenderRequest{Pack: "srv", Size: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
+	server := skin(PlayerRequest{Pack: "srv", Base: cache})
+	installed := skin(PlayerRequest{Pack: "srv"})
 	if server == installed {
 		t.Fatal("the server pack should render from the cache folder, not the installed pack")
 	}
-	if _, err := a.RenderSkin(RenderRequest{Pack: "srv", Base: t.TempDir(), Size: 64}); err == nil {
+	if _, err := a.GetPlayerTextures(PlayerRequest{Pack: "srv", Base: t.TempDir()}); err == nil {
 		t.Fatal("a folder other than the pack cache should be refused")
 	}
 
@@ -662,7 +481,7 @@ func TestRenderServerPack(t *testing.T) {
 	if !a.HasPackSkin("srv", cache) || a.HasPackSkin("srv", "") {
 		t.Fatal("a skin saved for a server pack must not apply to the installed pack")
 	}
-	if got, _ := a.RenderSkin(RenderRequest{Pack: "srv", Size: 64}); got != installed {
+	if skin(PlayerRequest{Pack: "srv"}) != installed {
 		t.Fatal("the installed pack should keep its own skin")
 	}
 }

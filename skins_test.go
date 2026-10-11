@@ -19,19 +19,19 @@ func TestGetPackSkinThumbnails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := a.GetPackSkinThumbnails([]string{"withSkin", "noSkin", "../withSkin", ""}, "")
+	got := a.GetPackThumbnailTextures([]string{"withSkin", "noSkin", "../withSkin", ""}, "")
 
 	if len(got) != 2 {
 		t.Fatalf("got thumbnails for %d packs, want 2: %v", len(got), keys(got))
 	}
 	for _, name := range []string{"withSkin", "noSkin"} {
-		if !strings.HasPrefix(got[name], "data:image/png;base64,") {
-			t.Fatalf("%s thumbnail is not a PNG data URI", name)
+		if tex := got[name]; !strings.HasPrefix(tex.Skin, "data:image/png;base64,") || tex.Layer1 == "" || tex.Right.Item == "" {
+			t.Fatalf("%s thumbnail is missing its skin, armor or sword", name)
 		}
 	}
 }
 
-func keys(m map[string]string) []string {
+func keys(m map[string]PlayerTextures) []string {
 	var ks []string
 	for k := range m {
 		ks = append(ks, k)

@@ -3,11 +3,12 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import * as THREE from 'three'
 import PackExporter from './PackExporter.vue'
 import JsonUiStage from './JsonUiStage.vue'
-import { GetSettings, SaveSettings, GetPackListWithInfo, GetInstalledPacks, GetPackPreviewInfo, GetPackItemTextures, GetPackSkyTextures, GetPackSkySubpacks, GetPackSkySubpackTextures, GetPackSkinThumbnails, PreviewPackSkin, SavePackSkin, ClearPreviewSkins, ClearPackSkin, HasPackSkin, GetCustomItems, SaveCustomItem, RemoveCustomItem, GetPackItemTextureNames, GetPackItemTexture, GetRemovedItems, SaveRemovedItem, RestoreRemovedItem, OpenFolder, DeleteInstalledPack, IsDebug, PackHasUiScreens, RenderSkin, RenderSkinFrames, RenderSkinGIF, ListAnimations, RenderItem, RenderItemSpin, SaveRender, GetPackCache, GetPackCacheList, ExportCachePacks, GetPackPreviewInfoFromCache, GetPackSkyTexturesFromCache, GetPackSkySubpacksFromCache, GetPackSkySubpackTexturesFromCache, GetPackItemTexturesFromCache, GetPackItemTextureNamesFromCache, GetPackItemTextureFromCache, PackHasUiScreensFromCache } from '../../../wailsjs/go/main/App'
+import { GetSettings, SaveSettings, GetPackListWithInfo, GetInstalledPacks, GetPackPreviewInfo, GetPackItemTextures, GetPackSkyTextures, GetPackSkySubpacks, GetPackSkySubpackTextures, PreviewPackSkin, SavePackSkin, ClearPreviewSkins, ClearPackSkin, HasPackSkin, GetCustomItems, SaveCustomItem, RemoveCustomItem, GetPackItemTextureNames, GetPackItemTexture, GetRemovedItems, SaveRemovedItem, RestoreRemovedItem, OpenFolder, DeleteInstalledPack, IsDebug, PackHasUiScreens, SaveRender, GetPackCache, GetPackCacheList, ExportCachePacks, GetPackPreviewInfoFromCache, GetPackSkyTexturesFromCache, GetPackSkySubpacksFromCache, GetPackSkySubpackTexturesFromCache, GetPackItemTexturesFromCache, GetPackItemTextureNamesFromCache, GetPackItemTextureFromCache, PackHasUiScreensFromCache } from '../../../wailsjs/go/main/App'
 
 import { parseBedrockCodes } from '../../utils/formatCodes'
 import { BACKGROUNDS, DEFAULT_BACKGROUND_ID, BACKGROUND_SETTING_KEY, DEFAULT_SKY_PACK_KEY, DEFAULT_SKY_SUBPACK_KEY, SKY_PACK_BACKGROUND_ID, SKY_PACK_SWATCH_STYLE, normalizeBackgroundId, backgroundById, backgroundSwatchStyle as swatchStyle } from '../../utils/backgrounds'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
+import { GetPackSkinThumbnails, ListAnimations, RenderItem, RenderItemSpin, RenderSkin, DrawSkin, RenderSkinGIF, invalidatePlayerTextures } from '../../utils/playerSkin'
 const props = defineProps({ active: Boolean, openPackReq: { type: Object, default: null } })
 
 const packList = ref([])
@@ -85,28 +86,24 @@ const skinModel = ref('auto-detect')
 const FOV = 35
 const viewYaw = ref(0)
 const viewPitch = ref(10)
-const viewZoom = ref(1.5) // bedrock-skin-go's Margin: smaller is closer
+const viewZoom = ref(1.5) // bedrock-skin's camera margin: smaller is closer
 
 // Animation: "" is a still; otherwise a motion or example animation name.
-// 30 FPS is the backend's cap; the motion is sampled from a continuous curve,
+// The animation runs at 60 FPS; the motion is sampled from a continuous curve,
 // so the extra frames only smooth it out (the clip keeps its real duration).
-const ANIM_FPS = 30
+const ANIM_FPS = 60
 const animationName = ref('')
 const animations = ref([])
-const animFrames = ref([])
-const animIndex = ref(0)
-// animFramesFresh is whether the loaded frames match the current camera.
-// animFramesFresh == false means the still path must keep drawing frames until
-// the settled set arrives; cameraStamp changes with the camera so an in-flight
-// load can tell it went stale.
-let animFramesFresh = false
-let cameraStamp = 0
-let animTimer = null
-let animToken = 0
-let animDebounce = null
+// The animation is drawn live, one frame per display frame, by the clock:
+// animStart is when it began, so a slow frame is dropped, never slowed down.
+let animStart = 0
+let animLoop = null
 
-const modalPlayerSrc = ref('')
-const fsPlayerSrc = ref('')
+// The player is drawn as raw pixels onto these canvases (see drawPlayer).
+const modalPlayerCanvas = ref(null)
+const fsPlayerCanvas = ref(null)
+const playerShown = ref(false)
+let lastPlayerFrame = null
 let renderToken = 0
 let renderInFlight = false
 let renderAgain = false
@@ -595,9 +592,10 @@ async function generateSkyCubemap(skyTex, cap) {
 }
 
 // ---------------------------------------------------------------------------
-// Viewer: a three.js sky layer behind a bedrock-skin-go player image. The
-// backend draws the player (skin, armor, elytra, held items) exactly as the
-// game does; three.js only turns the pack's cubemap with the same camera.
+// Viewer: a three.js sky layer behind a bedrock-skin player image. The backend
+// finds the player's textures (skin, armor, elytra, held items); bedrock-skin
+// draws them in a worker exactly as the game does; three.js only turns the
+// pack's cubemap with the same camera.
 // ---------------------------------------------------------------------------
 
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)) }
@@ -673,57 +671,58 @@ function animationSize() {
   return Math.min(playerSize(), ANIM_MAX_SIZE)
 }
 
-// Decode a data URI before showing it, so swapping frames never flashes.
-const decodedSrc = new Set()
-function decodeSrc(uri) {
-  if (!uri || decodedSrc.has(uri)) return Promise.resolve()
-  return new Promise(resolve => {
-    const img = new Image()
-    img.onload = () => {
-      decodedSrc.add(uri)
-      if (decodedSrc.size > 400) decodedSrc.clear()
-      resolve()
-    }
-    img.onerror = () => resolve()
-    img.src = uri
-  })
+// drawPlayer puts a frame of raw pixels on the visible player canvases. There
+// is no image to encode or decode, so a frame costs only its drawing.
+function drawPlayer(frame) {
+  if (!frame || destroyed) return
+  lastPlayerFrame = frame
+  const img = new ImageData(new Uint8ClampedArray(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength), frame.width, frame.height)
+  for (const c of [modalPlayerCanvas.value, fsPlayerCanvas.value]) {
+    if (!c) continue
+    if (c.width !== frame.width || c.height !== frame.height) { c.width = frame.width; c.height = frame.height }
+    c.getContext('2d').putImageData(img, 0, 0)
+  }
+  playerShown.value = true
 }
 
-async function setPlayerSrc(uri) {
-  if (!uri) return
-  await decodeSrc(uri)
-  if (destroyed) return
-  modalPlayerSrc.value = uri
-  fsPlayerSrc.value = uri
+// clearPlayer blanks the player, and drops any render still in flight, so the
+// viewer never shows the previous pack's skin while the next one loads.
+function clearPlayer() {
+  renderToken++
+  lastPlayerFrame = null
+  playerShown.value = false
+  for (const c of [modalPlayerCanvas.value, fsPlayerCanvas.value]) {
+    if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height)
+  }
+}
+
+// animFrame is the frame the clock is at; the renderer wraps it into the clip.
+function animFrame() {
+  return Math.floor((performance.now() - animStart) / 1000 * ANIM_FPS)
 }
 
 async function renderPlayerStill() {
-  // Never drop resolution while turning the model. A still pose renders at the
-  // full playerSize; an animation uses the same size as its preloaded loop so
-  // the image does not get softer when the clip starts looping.
+  // Never drop resolution while turning the model: a still renders at the full
+  // playerSize, an animation at the capped animationSize throughout.
   const size = animationName.value ? animationSize() : playerSize()
   const token = ++renderToken
-  // While the camera moves - or its frame set is still loading - an animation
-  // is drawn one frame at a time from its prepared set: a single cheap render
-  // keeps the model turning with the hand and still animating, and because the
-  // frame is framed by the animation's shared camera, whole-body motion keeps
-  // its place.
   const req = currentRequest(size)
   if (animationName.value) {
     req.animation = animationName.value
-    req.frame = animIndex.value
+    req.frame = animFrame()
   }
   try {
-    const uri = await RenderSkin(req)
+    const frame = await DrawSkin(req)
     if (token !== renderToken || destroyed) return
-    setPlayerSrc(uri)
+    drawPlayer(frame)
   } catch (e) {
-    if (isDebug.value) console.error('RenderSkin failed:', e)
+    if (isDebug.value) console.error('DrawSkin failed:', e)
   }
 }
 
-// pumpPlayerStill renders one still now, coalescing calls that arrive while a
-// render is already in flight.
+// pumpPlayerStill renders one picture now, coalescing calls that arrive while a
+// render is already in flight: the animation loop and a drag ask every display
+// frame, and only the latest camera and clock time is drawn.
 function pumpPlayerStill() {
   if (renderInFlight) { renderAgain = true; return }
   renderInFlight = true
@@ -737,101 +736,40 @@ function pumpPlayerStill() {
 }
 
 function schedulePlayerRender() {
-  // A settled camera with current frames reloads the whole set and loops it
-  // locally; anything else takes the cheap single-still path.
-  if (animationName.value && !dragging && !dragMoved) { scheduleAnimationFrames(); return }
   pumpPlayerStill()
 }
 
 function refreshPlayer() {
-  // An appearance change makes the loaded frames stale too: the still path
-  // draws the new look until the matching set arrives.
-  if (animationName.value) animFramesFresh = false
+  // Whatever changed may be a texture (a new skin, a vanilla download), so
+  // the next render fetches them again.
+  invalidatePlayerTextures()
   schedulePlayerRender()
 }
 
-// Animation frames are fetched once per camera/pose change, then cycled
-// locally at ANIM_FPS.
-function showAnimationFrame() {
-  // While the camera moves - or its frame set is stale - the still path owns
-  // the image; the loop must not overwrite it with frames from the old camera.
-  if (dragging || dragMoved || !animFramesFresh) return
-  const frames = animFrames.value
-  if (!frames.length) return
-  setPlayerSrc(frames[animIndex.value % frames.length])
-}
-
-let animFetching = false
-let animPending = false
-
-async function loadAnimationFramesNow() {
-  const name = animationName.value
-  if (!name) return
-  if (animFetching) { animPending = true; return }
-  animFetching = true
-  const token = ++animToken
-  const stamp = cameraStamp
-  try {
-    const frames = await RenderSkinFrames(currentRequest(animationSize(), name))
-    if (token !== animToken || destroyed) return
-    if (!frames || !frames.length) return
-    animFrames.value = frames
-    if (animIndex.value >= frames.length) animIndex.value = 0
-    // Warm the browser cache so the first swap has no blank flash.
-    frames.forEach(decodeSrc)
-    // These frames only match the current camera if it did not move while they
-    // rendered; otherwise the next settle loads them again. Until then the
-    // still path keeps the animation going.
-    if (stamp === cameraStamp) {
-      animFramesFresh = true
-      showAnimationFrame()
-    }
-  } catch (e) {
-    if (isDebug.value) console.error('RenderSkinFrames failed:', e)
-  } finally {
-    animFetching = false
-    if (animPending) { animPending = false; loadAnimationFramesNow() }
-  }
-}
-
-// Reload frames for the current camera once the rotation settles. The current
-// frames stay in memory and the still path keeps drawing them until the
-// matching set arrives, so the animation never pauses between the drag and the
-// new frames.
-function scheduleAnimationFrames() {
-  if (animDebounce) clearTimeout(animDebounce)
-  animDebounce = setTimeout(loadAnimationFramesNow, 120)
-}
-
+// startAnimationLoop draws a frame every display frame, from the clock, with
+// the camera as it is then: turning the model never pauses the animation.
 function startAnimationLoop() {
   stopAnimationLoop()
   if (!animationName.value) return
-  animTimer = setInterval(() => {
-    const len = animFrames.value.length
-    if (len) animIndex.value = (animIndex.value + 1) % len
-    // While following the camera (or waiting for its frame set), draw one still
-    // per tick: the animation keeps playing even if the hand is briefly still,
-    // and never freezes waiting for the settled set.
-    if (dragging || dragMoved || !animFramesFresh) { pumpPlayerStill(); return }
-    if (len) showAnimationFrame()
-  }, Math.round(1000 / ANIM_FPS))
+  animStart = performance.now()
+  const tick = () => {
+    animLoop = requestAnimationFrame(tick)
+    pumpPlayerStill()
+  }
+  animLoop = requestAnimationFrame(tick)
 }
 
 function stopAnimationLoop() {
-  if (animTimer) { clearInterval(animTimer); animTimer = null }
+  if (animLoop) { cancelAnimationFrame(animLoop); animLoop = null }
 }
 
-async function setAnimation(name) {
+function setAnimation(name) {
   animationName.value = name || ''
-  animIndex.value = 0
-  animFramesFresh = false
   if (!animationName.value) {
     stopAnimationLoop()
-    animFrames.value = []
     schedulePlayerRender()
     return
   }
-  await loadAnimationFramesNow()
   startAnimationLoop()
 }
 
@@ -1050,29 +988,20 @@ function cancelInertia() {
   if (inertia) { cancelAnimationFrame(inertia); inertia = null }
 }
 
-// cameraChanged records that the camera moved: the loaded frames no longer
-// match it, so the still path takes over until a settle reloads them. The stamp
-// lets an in-flight frame load tell it went stale.
+// cameraChanged records that the camera moved.
 function cameraChanged() {
   dragMoved = true
-  animFramesFresh = false
-  cameraStamp++
 }
 
-// settleCamera marks the camera as briefly still-moving: while it is, the
-// player is drawn one still per move; once it settles, the animation reloads
-// its frames for the final angle.
+// settleCamera marks the camera as still once it has stopped for a moment,
+// and draws it there.
 let cameraSettleTimer = null
 function settleCamera(delay) {
   if (cameraSettleTimer) clearTimeout(cameraSettleTimer)
   cameraSettleTimer = setTimeout(() => {
     if (dragging || inertia) return
     dragMoved = false
-    if (!animationName.value) { schedulePlayerRender(); return }
-    // Frames for the angle the user stopped at are loaded on settle; until
-    // then the still path keeps animating, so there is no pause.
-    if (animFramesFresh) return
-    scheduleAnimationFrames()
+    schedulePlayerRender()
   }, delay)
 }
 
@@ -1475,8 +1404,8 @@ function openFullscreen() {
       } catch {}
     }
     watchSkySizes()
-    if (animationName.value) { await loadAnimationFramesNow(); startAnimationLoop() }
-    else schedulePlayerRender()
+    if (lastPlayerFrame) drawPlayer(lastPlayerFrame)
+    schedulePlayerRender()
     recordMem('fs open')
   })
 }
@@ -1655,13 +1584,7 @@ async function openPack(packName) {
   leftAdjustOpen.value = false
   stopAnimationLoop()
   animationName.value = ''
-  animFrames.value = []
-  animFramesFresh = false
-  // Drop the last pack's picture, and any render still in flight for it, so
-  // the viewer never shows the previous pack's skin while this one loads.
-  renderToken++
-  modalPlayerSrc.value = ''
-  fsPlayerSrc.value = ''
+  clearPlayer()
   showModal.value = true
   await nextTick()
   ensureSkyView('modal')
@@ -1693,15 +1616,13 @@ function closeModal() {
   fullscreen.value = false
   cancelInertia()
   stopAnimationLoop()
-  if (animDebounce) { clearTimeout(animDebounce); animDebounce = null }
   if (skyResizeObserver) { skyResizeObserver.disconnect(); skyResizeObserver = null }
   // The modal's renderer is kept for the next pack; only its sky is dropped.
   parkSkyView(viewerInstance)
   disposeViewerResources(fsViewerInstance)
   fsViewerInstance = null
   animationName.value = ''
-  animFrames.value = []
-  animFramesFresh = false
+  clearPlayer()
   setLastSkyTex(null)
   currentSkyKey = null
   skyLoading.value = false
@@ -1788,13 +1709,10 @@ async function loadPackData(packName) {
 }
 
 async function applyPlayerAppearance() {
-  if (animationName.value) {
-    await loadAnimationFramesNow()
-    startAnimationLoop()
-  } else {
-    renderAgain = false
-    await renderPlayerStill()
-  }
+  invalidatePlayerTextures()
+  if (animationName.value) startAnimationLoop()
+  renderAgain = false
+  await renderPlayerStill()
 }
 
 async function reloadPack() {
@@ -2226,7 +2144,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onFsNavKey)
   cancelInertia()
   stopAnimationLoop()
-  if (animDebounce) { clearTimeout(animDebounce); animDebounce = null }
   if (skyResizeObserver) { skyResizeObserver.disconnect(); skyResizeObserver = null }
   disposeViewerResources(viewerInstance)
   disposeViewerResources(fsViewerInstance)
@@ -2341,7 +2258,7 @@ watch(() => props.openPackReq, (req) => {
 
         <div v-show="viewerMode === 'texture'" class="pv-viewer-wrap">
           <div ref="modalContainer" class="pv-3d">
-            <img v-if="modalPlayerSrc" :src="modalPlayerSrc" class="pv-player-img" width="512" height="512" alt="Player preview" />
+            <canvas ref="modalPlayerCanvas" v-show="playerShown" class="pv-player-img" width="512" height="512" aria-label="Player preview"></canvas>
             <div v-if="skyLoading" class="pv-sky-loading"><i class="fa fa-spinner fa-spin"></i> Loading sky…</div>
           </div>
 
@@ -2524,7 +2441,7 @@ watch(() => props.openPackReq, (req) => {
 
     <div v-if="fullscreen" class="pv-fs-overlay">
       <div ref="fsContainerRef" class="pv-fs-3d">
-        <img v-if="fsPlayerSrc" :src="fsPlayerSrc" class="pv-player-img" width="512" height="512" alt="Player preview" />
+        <canvas ref="fsPlayerCanvas" v-show="playerShown" class="pv-player-img" width="512" height="512" aria-label="Player preview"></canvas>
         <button class="pv-nav pv-nav-prev" @click.stop="navPack(-1)" title="Previous pack (←)"><i class="fa fa-chevron-left"></i></button>
         <button class="pv-nav pv-nav-next" @click.stop="navPack(1)" title="Next pack (→)"><i class="fa fa-chevron-right"></i></button>
         <div v-if="skySubpacks.length > 0" class="pv-skybar pv-fs-skybar">
@@ -3076,10 +2993,11 @@ watch(() => props.openPackReq, (req) => {
   pointer-events: none;
 }
 
-/* The player is a transparent bedrock-skin-go render laid over the sky
-   canvas and centred in the square that fits the viewer. object-fit keeps the
-   displayed size fixed however many pixels a still or frame was rendered at,
-   so releasing a drag does not change the apparent zoom. */
+/* The player is a transparent bedrock-skin render, drawn as raw pixels on a
+   canvas laid over the sky and centred in the square that fits the viewer.
+   object-fit keeps the displayed size fixed however many pixels a still or
+   frame was rendered at, so releasing a drag does not change the apparent
+   zoom. */
 .pv-player-img {
   position: absolute;
   inset: 0;
