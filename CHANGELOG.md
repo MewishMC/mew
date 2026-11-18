@@ -3,6 +3,30 @@
 Short, append-only summary of what the audit changed. Details and IDs are in
 ISSUES.md; the commands used are in NOTES.md.
 
+## Feature testing pass
+
+Every bound backend feature is now driven end to end by tests (porting, batch
+porting, URL porting, sky packs, animated inventories, the manifest tool, the
+recolor tool, the pack viewer, per-pack skins, settings/data folders, exports,
+updates and MediaFire). Seven defects fell out of that:
+
+- **Startup-context crashes (high)** — a progress event or a batch port before
+  startup finished killed the process: Wails exits on an invalid context, and
+  `context.WithCancel(nil)` panics. All events go through one guarded helper and
+  batch ports fall back to a background context.
+- **Wrong cache folder** — the cache browser and cache export used the default
+  Minecraft cache even when a custom `packCachePath` was set.
+- **Update prompts** — an older release tag offered a "downgrade", versions were
+  compared as text, and the installer download had no timeout.
+- **Download names** — a URL without a file name produced a file named after the
+  host, and RFC 5987 `filename*=` names kept their `UTF-8''` prefix.
+- **Silent batch failures** — `PortFolder`/`PortLocalArchive` returned success
+  when every pack failed.
+
+Behaviour changes worth knowing: a fully failed batch now returns an error
+(the partial case still succeeds), and `CheckForUpdate` only reports a newer
+version.
+
 ## Security
 
 - **Path traversal (critical)** — a pack downloaded from a URL no longer gets to

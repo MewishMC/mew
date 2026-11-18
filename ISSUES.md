@@ -7,10 +7,12 @@ Baseline before any change: `go build`, `go vet` and `go test ./...` all passed
 (48 tests, 7 skipped); frontend build passed; `npm audit` reported 9
 vulnerabilities (8 high, 1 moderate). See NOTES.md for the exact commands.
 
-Summary: 39 findings — 1 critical, 8 high, 14 medium, 16 low.
-**30 fixed, 9 won't-fix** (every won't-fix has its reason below).
+Summary: 46 findings — 1 critical, 10 high, 18 medium, 17 low.
+**37 fixed, 9 won't-fix** (every won't-fix has its reason below).
 The second full pass added the "Pass 2" and TEST/CFG entries; the third pass
 found nothing new, and every fix was re-checked with build + vet + test.
+The fourth pass ("Pass 4", below) drove every bound feature end to end with new
+tests rather than re-reading code, and found seven more defects.
 
 ## Security
 
@@ -61,6 +63,22 @@ found nothing new, and every fix was re-checked with build + vet + test.
 | FE-2 | frontend/src/utils/playerSkin.js | low | `sentTex` grows one entry per rendered texture set for the life of the window. | **won't-fix** — bounded in practice (one id per distinct player loadout per session, ~50 bytes each) and the ids must stay stable for the worker; evicting them would re-send textures the worker already holds. |
 | FE-3 | frontend/src/utils/hue.js (`upscaleNearestNeighbor`) | low | The promise never settles if the image fails to load (no `onerror`). | **won't-fix** — every caller passes a data URI produced by a canvas in the same session, so the load cannot fail; adding an error path would change what callers receive for no reachable case. |
 | TEST-1 | jsonui_vanilla_test.go | medium | Three tests download ~100 files from the public vanilla mirror on every run, so the suite fails on an offline machine and the new CI test step would go red for a network blip. | **fixed** — `requireVanillaMirror` skips with a clear message only when the mirror is unreachable; assertions unchanged when online |
+| TEST-2 | *.go (whole bound API) | medium | Nothing exercised the bound `*App` methods themselves: the suite covered helpers (zip writing, parsing) but never ran a port, a sky pack, an animated pack, the manifest tool, the pack viewer, the URL flows or the updater end to end. | **fixed** — Pass 4 adds 85 feature-level tests (74 in the main package, 11 in `internal/mediafire`) driving every bound method that does not open a native dialog (see below) |
+
+## Pass 4: findings from the functional feature tests
+
+These surfaced while driving each feature end to end; unlike the earlier passes
+they are defects that only appear when the real code paths run.
+
+| ID | File:line | Sev | Issue | Status |
+| --- | --- | --- | --- | --- |
+| F-1 | app.go (`emit`), recent.go, updates.go, jsonui_vanilla.go | high | Every backend event went through `wailsRuntime.EventsEmit(a.ctx, …)`. Wails treats an invalid context as fatal ("cannot call … An invalid context was passed") and exits the process, so any bound method that reported progress before startup had finished took the whole app down instead of returning an error. | **fixed** — one guarded `a.emit` helper is now the only place events are emitted |
+| F-2 | porting.go (`PortFolder`, `PortLocalArchive`) | high | Both built their cancellable context with `context.WithCancel(a.ctx)`; with no startup context yet, `context.WithCancel` panics on a nil parent, so starting a batch port panicked the app. | **fixed** — `operationContext()` falls back to `context.Background()` |
+| F-3 | packs.go (`GetPackCacheList`), porting.go (`ExportCachePacks`) | medium | Both resolved an empty `basePath` to the *default* pack cache, while `GetPackCache` (the panel that lists the folder) honours the configured `packCachePath`. After picking a custom cache folder the UI listed that folder in the header but browsed the default one, so the list looked empty and export found nothing. | **fixed** — all three use `a.packCachePath()` |
+| F-4 | updates.go (`CheckForUpdate`) | medium | "Needs update" was `latest != current`, so an older or equal tag offered a downgrade, and versions were compared as text ("1.10.0" < "1.1.1"). | **fixed** — `versionNewer` compares dotted numbers; unparsable tags keep the old inequality behaviour |
+| F-5 | updates.go (`DownloadUpdate`, `CheckForUpdate`, `GetChangelog`) | medium | The installer was fetched with `http.Get`, which has no timeout: a server that accepted the connection and then stalled hung the download forever, with no cancel. The metadata clients were also hard-wired, so the updater could not be tested without touching the network or the real Downloads folder. | **fixed** — `downloadClient` bounds only the wait for headers (large updates still finish), `updateClient` has the 10 s timeout, and `downloadsDir` is injectable |
+| F-6 | internal/mediafire/mediafire.go (`extractFilename`) | low | When a URL carried no file name the last dotted segment of the whole URL was used, so `https://dl.example.com/` was saved as a file named `dl.example.com`. RFC 5987 `filename*=UTF-8''name` headers were read as plain filenames, keeping the `UTF-8''` prefix and the percent escapes. | **fixed** — only the URL path is searched; `filename*=` is decoded |
+| F-7 | porting.go (`PortFolder`, `PortLocalArchive`) | medium | When every file in a batch failed, both still returned `nil`: the UI got an "All N failed" progress event and a resolved promise, so a caller could not tell the batch from a success. | **fixed** — an all-failed batch returns an error; a partial batch still succeeds |
 
 ## Dead code / docs / config
 
