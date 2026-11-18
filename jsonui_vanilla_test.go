@@ -5,8 +5,21 @@ import (
 	"testing"
 )
 
-func TestVanillaUiFiles(t *testing.T) {
+// requireVanillaMirror returns an App whose vanilla cache has the definition
+// list, skipping the test when the public mirror cannot be reached. These tests
+// exercise real downloads, so an offline machine (or a rate-limited GitHub) must
+// not turn into a red build; their assertions are unchanged when it is online.
+func requireVanillaMirror(t *testing.T) *App {
+	t.Helper()
 	a := &App{}
+	if _, err := a.readVanillaFile(vanillaDefsPath); err != nil {
+		t.Skipf("vanilla mirror unavailable: %v", err)
+	}
+	return a
+}
+
+func TestVanillaUiFiles(t *testing.T) {
+	a := requireVanillaMirror(t)
 	files, err := a.GetVanillaUiFiles()
 	if err != nil {
 		t.Fatalf("GetVanillaUiFiles: %v", err)
@@ -37,7 +50,7 @@ func TestVanillaUiFiles(t *testing.T) {
 }
 
 func TestVanillaFileBytesTexture(t *testing.T) {
-	a := &App{}
+	a := requireVanillaMirror(t)
 	b64, err := a.GetVanillaFileBytes("textures/gui/gui.png")
 	if err != nil {
 		t.Fatalf("GetVanillaFileBytes: %v", err)
