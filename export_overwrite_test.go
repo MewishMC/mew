@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,6 +80,42 @@ func TestGetOutputDirFallsBackForUnusableConfiguredDir(t *testing.T) {
 	}
 	if !strings.HasSuffix(filepath.ToSlash(got), "Downloads") {
 		t.Logf("fallback folder is %q", got)
+	}
+}
+
+// TestSkyPackOverwritesReadOnlyMcpack reproduces the reported failure at its
+// real entry point: an "image (1).png" sky exported into a folder that already
+// holds a read-only "image (1).mcpack". Before the fix this returned
+// "failed to create mcpack: open image (1).mcpack: Access is denied".
+func TestSkyPackOverwritesReadOnlyMcpack(t *testing.T) {
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+
+	outDir := t.TempDir()
+	target := filepath.Join(outDir, "image (1).mcpack")
+	makeReadOnly(t, target)
+
+	// Precondition: this filesystem really does refuse to write that file, so a
+	// pass below means the export cleared it rather than never hitting the case.
+	f, openErr := os.OpenFile(target, os.O_WRONLY, 0)
+	if openErr == nil {
+		f.Close()
+		t.Skip("filesystem does not enforce the read-only attribute")
+	}
+	t.Logf("pre-fix precondition, writing the target fails: %v", openErr)
+
+	src := encodeTestPNG(t, color.RGBA{R: 10, G: 200, B: 40, A: 255})
+	got, err := buildSkyPack(src, "image (1).png", 128, outDir, "sky", "", nil)
+	if err != nil {
+		t.Fatalf("buildSkyPack over a read-only target: %v", err)
+	}
+	if !samePath(got, target) {
+		t.Fatalf("buildSkyPack wrote %q, want %q", got, target)
+	}
+	entries := zipEntries(t, target)
+	for _, want := range []string{"manifest.json", "pack_icon.png"} {
+		if !entries[want] {
+			t.Errorf("written pack is missing %s (has %v)", want, entries)
+		}
 	}
 }
 
