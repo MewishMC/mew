@@ -83,12 +83,19 @@ func TestCheckForUpdateNeverOffersADowngrade(t *testing.T) {
 		}
 	}
 
-	// A 1.10.0 release is newer than 1.1.1 even though it sorts lower as text.
+	// Versions compare as numbers, not text: 1.10.0 is newer than 1.1.1.
+	if !versionNewer("1.10.0", "1.1.1") {
+		t.Error("1.10.0 should compare newer than 1.1.1")
+	}
+
+	// A release one build past the running version is offered, whatever the
+	// current version number happens to be.
+	newerTag := "v" + currentVersion + ".1"
 	withUpdateClient(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		return jsonResponse(200, releaseJSON("v1.10.0", "mew.exe")), nil
+		return jsonResponse(200, releaseJSON(newerTag, "mew.exe")), nil
 	}))
 	if info := a.CheckForUpdate(); !info.NeedsUpdate {
-		t.Error("1.10.0 should be newer than 1.1.1")
+		t.Errorf("%s should be offered over %s", newerTag, currentVersion)
 	}
 }
 

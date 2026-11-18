@@ -1,6 +1,22 @@
-# Audit changelog
+# Changelog
 
-Short, append-only summary of what the audit changed. Details and IDs are in
+## 3.1.0
+
+- Pack Viewer: the pack's own sky shows again. A leftover `skySlider`
+  reference threw during loading, so the sky step never ran and the viewer
+  always fell back to the default gradient. Removed the Viewer Background and
+  Default Sky Pack settings, which no longer did anything useful.
+- Pack Viewer: dragging left and right now turns the view the same way the
+  pointer moves; up and down were already correct.
+- Recolor editor: saving a texture over an existing one in an installed pack
+  asks before overwriting again (the check was rejected silently).
+- Hardening from the audit: untrusted archive/download names, unbounded
+  downloads, startup event crashes, a custom pack-cache folder, update checks,
+  and fully failed port batches (now report an error).
+
+---
+
+Short, append-only summary of the audit's own changes. Details and IDs are in
 ISSUES.md; the commands used are in NOTES.md.
 
 ## Feature testing pass

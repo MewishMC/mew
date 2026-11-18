@@ -2070,7 +2070,10 @@ async function saveAs() {
 
   if (isInstalled.value) {
     try {
-      const existing = await ListPackTextures(props.source.dirName)
+      // The base path must be passed explicitly: Wails rejects a call whose
+      // argument count differs from the Go signature, which left this overwrite
+      // check silently doing nothing.
+      const existing = await ListPackTextures(props.source.dirName, packBasePath.value)
       if (existing.some(t => t.relPath === relPath)) {
         const confirm = await Swal.mixin({
           customClass: { popup: 'swal-custom-popup', confirmButton: 'custom-confirm-btn', cancelButton: 'custom-cancel-btn' },
