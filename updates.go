@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,23 +20,26 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-var currentVersion = "3.1.0"
+var currentVersion = "3.1.1"
 
-const githubReleasesURL = "https://api.github.com/repos/KyarottoOwO/mew/releases/latest"
+const (
+	githubReleasesURL = "https://api.github.com/repos/KyarottoOwO/mew/releases/latest"
+	// updateAssetName is the build inside the release, updaterName is the
+	// helper that swaps it in for the running one.
+	updateAssetName = "mew.exe"
+	updaterName     = "update.exe"
+)
 
 var (
 	// updateClient fetches release metadata. downloadClient streams the
-	// installer and only bounds the wait for headers, so a large update on a
-	// slow connection is not cut off mid-transfer (http.Get had no bounds at
-	// all, so a stalled server hung the update forever).
+	// updater build and only bounds the wait for headers, so a slow connection
+	// is not cut off mid-transfer (http.Get had no bounds at all, so a stalled
+	// server hung the update forever).
 	updateClient   = &http.Client{Timeout: 10 * time.Second}
 	downloadClient = &http.Client{Transport: &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		ResponseHeaderTimeout: 30 * time.Second,
 	}}
-	// downloadsDir is where DownloadUpdate writes and InstallUpdate looks. It
-	// is a variable so tests never touch the user's real Downloads folder.
-	downloadsDir = userDownloadsDir
 )
 
 // versionNumbers splits "1.2.3" (with an optional v prefix or -suffix) into
@@ -83,10 +89,73 @@ func versionNewer(latest, current string) bool {
 	return false
 }
 
+type ghAsset struct {
+	Name        string `json:"name"`
+	DownloadURL string `json:"browser_download_url"`
+	Digest      string `json:"digest"` // "sha256:<hex>"
+}
+
+type ghRelease struct {
+	TagName string    `json:"tag_name"`
+	Assets  []ghAsset `json:"assets"`
+}
+
+func (r *ghRelease) asset(name string) *ghAsset {
+	for i := range r.Assets {
+		if strings.EqualFold(r.Assets[i].Name, name) {
+			return &r.Assets[i]
+		}
+	}
+	return nil
+}
+
+// releaseAPI is where the update check looks. MEW_RELEASE_API points it at a
+// local fake, so the whole update flow can be run without publishing a
+// release; everything except loopback assets is still refused below.
+func releaseAPI() string {
+	if v := strings.TrimSpace(os.Getenv("MEW_RELEASE_API")); v != "" {
+		return v
+	}
+	return githubReleasesURL
+}
+
+// fetchLatestRelease reads the newest published release. A nil release with no
+// error means the repository has no release to install yet.
+func fetchLatestRelease() (*ghRelease, error) {
+	req, err := http.NewRequest(http.MethodGet, releaseAPI(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "mew-updater")
+
+	resp, err := updateClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, nil
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("checking for a release failed: %s", resp.Status)
+	}
+
+	var rel ghRelease
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return nil, fmt.Errorf("reading the release: %w", err)
+	}
+	// A release without a build and an updater can't be installed, so it is
+	// nothing to offer.
+	if rel.asset(updateAssetName) == nil || rel.asset(updaterName) == nil {
+		return nil, nil
+	}
+	return &rel, nil
+}
+
 type UpdateInfo struct {
 	NeedsUpdate   bool   `json:"needsUpdate"`
 	LatestVersion string `json:"latestVersion"`
-	DownloadURL   string `json:"downloadUrl"`
 }
 
 type ChangelogEntry struct {
@@ -101,178 +170,140 @@ func (a *App) GetVersion() string {
 }
 
 func (a *App) CheckForUpdate() UpdateInfo {
-	req, err := http.NewRequest("GET", githubReleasesURL, nil)
-	if err != nil {
-		return UpdateInfo{NeedsUpdate: false}
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := updateClient.Do(req)
-	if err != nil {
-		return UpdateInfo{NeedsUpdate: false}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	rel, err := fetchLatestRelease()
+	if err != nil || rel == nil {
 		return UpdateInfo{NeedsUpdate: false}
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return UpdateInfo{NeedsUpdate: false}
-	}
-
-	var release struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.Unmarshal(body, &release); err != nil {
-		return UpdateInfo{NeedsUpdate: false}
-	}
-
-	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	latestVersion := strings.TrimPrefix(rel.TagName, "v")
 	if latestVersion == "" || !versionNewer(latestVersion, currentVersion) {
 		return UpdateInfo{NeedsUpdate: false}
 	}
 
-	downloadURL := ""
-	for _, asset := range release.Assets {
-		if strings.HasSuffix(strings.ToLower(asset.Name), ".exe") {
-			downloadURL = asset.BrowserDownloadURL
-			break
-		}
-	}
-
-	return UpdateInfo{
-		NeedsUpdate:   true,
-		LatestVersion: latestVersion,
-		DownloadURL:   downloadURL,
-	}
+	return UpdateInfo{NeedsUpdate: true, LatestVersion: latestVersion}
 }
 
-// userDownloadsDir returns the user's Downloads folder when it exists, falling
-// back to the home directory.
-func userDownloadsDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		if env := os.Getenv("USERPROFILE"); env != "" {
-			home = env
-		}
+// updaterDir is where update.exe is kept: %LOCALAPPDATA%\mew, next to the
+// settings, so nothing extra lands beside mew.exe. The updater gets MEW's path
+// as an argument, so it can run from there. Without a data folder it falls
+// back to the folder the app runs from.
+func updaterDir(exeDir string) string {
+	if base := os.Getenv("LOCALAPPDATA"); base != "" {
+		return filepath.Join(base, "mew")
 	}
-	if home == "" {
-		home, _ = os.UserCacheDir()
-	}
-	downloads := filepath.Join(home, "Downloads")
-	if st, err := os.Stat(downloads); err == nil && st.IsDir() {
-		return downloads
-	}
-	return home
+	return exeDir
 }
 
-const updateProgressEvent = "updateProgress"
-
-func (a *App) emitUpdateProgress(downloaded, total int64) {
-	a.emit(updateProgressEvent, map[string]interface{}{
-		"downloaded": downloaded,
-		"total":      total,
-	})
-}
-
-type updateProgressWriter struct {
-	app        *App
-	total      int64
-	downloaded int64
-	last       time.Time
-}
-
-func (w *updateProgressWriter) Write(p []byte) (int, error) {
-	n := len(p)
-	w.downloaded += int64(n)
-	if time.Since(w.last) > 150*time.Millisecond {
-		w.last = time.Now()
-		w.app.emitUpdateProgress(w.downloaded, w.total)
-	}
-	return n, nil
-}
-
-// DownloadUpdate downloads the newest MEW installer into the Downloads folder
-// and returns the saved file path. Progress is reported through the
-// "updateProgress" event, throttled during the transfer.
 // allowedUpdateURL reports whether a download URL is a GitHub release asset, the
-// only place MEW's own updates come from. The URL arrives from the UI, so it is
-// validated rather than trusted.
+// only place MEW's own updates come from. The URL arrives from a release, so it
+// is validated rather than trusted.
 func allowedUpdateURL(rawURL string) bool {
 	u, err := url.Parse(rawURL)
-	if err != nil || u.Scheme != "https" {
+	if err != nil {
 		return false
 	}
 	host := strings.ToLower(u.Hostname())
-	return host == "github.com" || host == "api.github.com" || strings.HasSuffix(host, ".githubusercontent.com")
+	if u.Scheme == "https" {
+		return host == "github.com" || host == "api.github.com" || strings.HasSuffix(host, ".githubusercontent.com")
+	}
+	// A fake release (MEW_RELEASE_API) serves its assets from loopback only.
+	if u.Scheme == "http" && os.Getenv("MEW_RELEASE_API") != "" {
+		return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	}
+	return false
 }
 
-func (a *App) DownloadUpdate(rawURL string) (string, error) {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return "", fmt.Errorf("no download URL provided")
+// ensureUpdater returns the path of update.exe in dir, downloading it from the
+// release first when it isn't there.
+func ensureUpdater(rel *ghRelease, dir string) (string, error) {
+	path := filepath.Join(dir, updaterName)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
 	}
-	if !allowedUpdateURL(rawURL) {
-		return "", fmt.Errorf("update downloads are only accepted from GitHub releases")
+	asset := rel.asset(updaterName)
+	if asset == nil {
+		return "", fmt.Errorf("%s is missing and release %s doesn't include it", updaterName, rel.TagName)
+	}
+	if !allowedUpdateURL(asset.DownloadURL) {
+		return "", errors.New("the updater is not published on GitHub")
 	}
 
-	resp, err := downloadClient.Get(rawURL)
+	resp, err := downloadClient.Get(asset.DownloadURL)
 	if err != nil {
-		return "", fmt.Errorf("download failed: %v", err)
+		return "", err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("download failed (HTTP %d)", resp.StatusCode)
 	}
-
-	dir := downloadsDir()
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return "", fmt.Errorf("failed to access downloads folder: %v", err)
-	}
-
-	fileName := "mew.exe"
-	tmpPath := filepath.Join(dir, fileName+".part")
-	finalPath := filepath.Join(dir, fileName)
-
-	// Dropping the caller's earlier copy here meant a failed download left them
-	// with no installer at all, so the old one is only removed once the new one
-	// has fully arrived.
-	_ = os.Remove(tmpPath)
-
-	out, err := os.Create(tmpPath)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to create file: %v", err)
+		return "", err
+	}
+	if len(data) == 0 {
+		return "", errors.New("downloaded updater is empty")
+	}
+	sum := sha256.Sum256(data)
+	if want := strings.TrimPrefix(strings.ToLower(asset.Digest), "sha256:"); want != "" && want != hex.EncodeToString(sum[:]) {
+		return "", errors.New("downloaded updater does not match its published checksum")
 	}
 
-	total := resp.ContentLength
-	a.emitUpdateProgress(0, total)
-	writer := &updateProgressWriter{app: a, total: total}
-	_, copyErr := io.Copy(out, io.TeeReader(resp.Body, writer))
-	closeErr := out.Close()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	tmp := path + ".new"
+	if err := os.WriteFile(tmp, data, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return "", err
+	}
+	return path, nil
+}
 
-	if copyErr != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("download failed: %v", copyErr)
-	}
-	if closeErr != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("download failed: %v", closeErr)
-	}
-	_ = os.Remove(finalPath)
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		os.Remove(tmpPath)
-		return "", fmt.Errorf("failed to save update: %v", err)
+// StartUpdate hands the update to update.exe, which downloads the new build,
+// swaps it in and starts MEW again. MEW quits so its executable can be
+// replaced: a running Windows executable can't overwrite itself.
+func (a *App) StartUpdate() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not find the running executable: %v", err)
 	}
 
-	a.emitUpdateProgress(total, total)
-	a.logDebug(fmt.Sprintf("DownloadUpdate: saved %s", finalPath))
-	return finalPath, nil
+	rel, err := fetchLatestRelease()
+	if err != nil {
+		return err
+	}
+	if rel == nil {
+		return errors.New("no newer release is available")
+	}
+	// The banner only offers a newer build, but the updater would happily
+	// install an older one if the check went stale.
+	if !versionNewer(strings.TrimPrefix(rel.TagName, "v"), currentVersion) {
+		return fmt.Errorf("MEW is already up to date (v%s)", currentVersion)
+	}
+
+	updater, err := ensureUpdater(rel, updaterDir(filepath.Dir(exe)))
+	if err != nil {
+		return fmt.Errorf("could not get the updater: %v", err)
+	}
+
+	a.logDebug("StartUpdate: handing over to " + updater)
+	if _, err := os.StartProcess(updater, []string{updater, exe}, &os.ProcAttr{
+		Dir:   filepath.Dir(exe),
+		Env:   os.Environ(),
+		Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+	}); err != nil {
+		return fmt.Errorf("could not start the updater: %v", err)
+	}
+
+	// Give the updater a moment to start, then get out of the way.
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		wailsRuntime.Quit(a.ctx)
+	}()
+	return nil
 }
 
 func (a *App) GetChangelog() []ChangelogEntry {
@@ -370,34 +401,4 @@ func (a *App) OpenDonationLink() {
 
 func (a *App) OpenDownloadLink(url string) {
 	a.openInBrowser(url)
-}
-
-// InstallUpdate launches the downloaded installer so the update can proceed.
-func (a *App) InstallUpdate(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return fmt.Errorf("no update file path provided")
-	}
-	if st, err := os.Stat(path); err != nil || st.IsDir() {
-		return fmt.Errorf("update file not found: %s", path)
-	}
-	// Only run the installer DownloadUpdate wrote into Downloads. Without this
-	// any path the UI could be made to send would be executed.
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return fmt.Errorf("invalid update path: %s", path)
-	}
-	if !samePath(filepath.Dir(abs), downloadsDir()) {
-		return fmt.Errorf("update file is not in your Downloads folder: %s", path)
-	}
-	switch strings.ToLower(filepath.Ext(abs)) {
-	case ".exe", ".msi":
-	default:
-		return fmt.Errorf("not an installer: %s", filepath.Base(abs))
-	}
-	cmd := exec.Command(abs)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start installer: %v", err)
-	}
-	return nil
 }

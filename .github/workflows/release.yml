@@ -42,6 +42,14 @@ jobs:
           VERSION="${TAG#v}"
           wails build -upx -ldflags "-s -w -X main.currentVersion=$VERSION"
 
+      # update.exe is its own module: it downloads the new mew.exe, swaps it in
+      # and starts it again.
+      - name: Build the updater
+        shell: bash
+        run: |
+          cd update
+          go build -ldflags "-s -w -H windowsgui" -o ../build/bin/update.exe .
+
       - name: Create Release
         id: release
         shell: bash
@@ -49,7 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          gh release create "$TAG" build/bin/mew.exe \
+          gh release create "$TAG" build/bin/mew.exe build/bin/update.exe \
             --title "MEW $TAG" \
             --generate-notes
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"

@@ -16,7 +16,7 @@ import PackViewer from './components/tools/PackViewer.vue'
 import ManifestTool from './components/tools/ManifestTool.vue'
 import ProgressNotification from './components/shared/ProgressNotification.vue'
 import { GetSettings, SaveSettings, CheckForUpdate, OpenDownloadLink, SetDiscordActivity } from '../wailsjs/go/main/App'
-import { updaterState, bindUpdaterEvents, unbindUpdaterEvents, downloadUpdate, installUpdate } from './utils/updater'
+import { updaterState, startUpdate } from './utils/updater'
 
 const currentPage = ref('home')
 const recolorSource = ref(null)
@@ -26,7 +26,6 @@ const sidebarWidth = ref(64)
 const homeAnimated = ref(localStorage.getItem('mew_home_animated') === '1')
 const updateAvailable = ref(false)
 const latestVersion = ref('')
-const downloadURL = ref('')
 const updateDismissed = ref(false)
 
 function onHomeAnimated() {
@@ -60,7 +59,7 @@ function closeDisplay() {
 }
 
 function dismissUpdate() {
-  if (updaterState.state === 'downloading') return
+  if (updaterState.busy) return
   updateDismissed.value = true
 }
 
@@ -81,7 +80,6 @@ async function checkForUpdates() {
     if (info.needsUpdate) {
       updateAvailable.value = true
       latestVersion.value = info.latestVersion
-      downloadURL.value = info.downloadUrl
     }
   } catch (e) {
     console.error('Update check failed:', e)
@@ -89,7 +87,6 @@ async function checkForUpdates() {
 }
 
 onMounted(() => {
-  bindUpdaterEvents()
   syncSettingsToBackend()
   checkForUpdates()
   SetDiscordActivity('Browsing MEW', 'Minecraft Bedrock Texture Pack Manager')
@@ -97,7 +94,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unbindUpdaterEvents()
   window.removeEventListener('wheel', blockCtrlZoom)
 })
 
@@ -111,25 +107,19 @@ function blockCtrlZoom(e) {
     <div v-if="updateAvailable && !updateDismissed" class="update-banner">
       <i class="fa fa-download update-icon"></i>
 
-      <template v-if="updaterState.state === 'done'">
-        <span class="update-text">v{{ latestVersion }} downloaded</span>
-        <button class="update-btn update-install" @click="installUpdate(updaterState.path)"><i class="fa fa-play"></i> Launch new version</button>
+      <template v-if="updaterState.state === 'restarting'">
+        <span class="update-text">Installing v{{ latestVersion }} &mdash; MEW will restart</span>
       </template>
 
       <template v-else-if="updaterState.state === 'error'">
         <span class="update-text">Update failed &mdash; {{ updaterState.error }}</span>
-        <button class="update-btn" @click="downloadUpdate(downloadURL)"><i class="fa fa-rotate-right"></i> Retry</button>
-        <button class="update-btn" @click="OpenDownloadLink(downloadURL)">View on GitHub</button>
+        <button class="update-btn" @click="startUpdate"><i class="fa fa-rotate-right"></i> Retry</button>
+        <button class="update-btn" @click="OpenDownloadLink('https://github.com/KyarottoOwO/mew/releases')">View on GitHub</button>
       </template>
 
       <template v-else>
         <span class="update-text">A new version (<strong>v{{ latestVersion }}</strong>) is available!</span>
-        <div v-if="updaterState.state === 'downloading'" class="update-progress">
-          <div class="update-track"><div class="update-fill" :style="{ width: updaterState.percent + '%' }"></div></div>
-          <span class="update-pct">{{ updaterState.total > 0 ? updaterState.percent + '%' : '...' }}</span>
-        </div>
-        <button v-else-if="downloadURL" class="update-btn" @click="downloadUpdate(downloadURL)"><i class="fa fa-download"></i> Download</button>
-        <button v-else class="update-btn" @click="OpenDownloadLink('https://github.com/KyarottoOwO/mew/releases')">View on GitHub</button>
+        <button class="update-btn" :disabled="updaterState.busy" @click="startUpdate"><i class="fa fa-arrow-up"></i> Update now</button>
       </template>
 
       <button class="update-dismiss" @click="dismissUpdate"><i class="fa fa-xmark"></i></button>
@@ -242,57 +232,11 @@ body {
   margin-left: 0;
 }
 
-.update-install {
-  background: var(--accent);
-  color: #0e1420;
-  border-color: var(--accent);
-  font-weight: 600;
-}
-
-.update-install:hover {
-  background: var(--accent-light);
-  border-color: var(--accent-light);
-  color: #0e1420;
-}
-
 .update-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-.update-progress {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 180px;
-  max-width: 320px;
-  flex-shrink: 1;
-}
-
-.update-track {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-hover-3);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.update-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 0.15s ease;
-}
-
-.update-pct {
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  width: 3ch;
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .update-dismiss {

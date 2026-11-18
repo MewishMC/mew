@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.1
+
+- Auto-updates: MEW now fetches the new build, swaps it in and restarts itself
+  through the small `update.exe` helper shipped in each release, instead of
+  downloading a copy to Downloads and running it by hand.
+
 ## 3.1.0
 
 - Pack Viewer: the pack's own sky shows again. A leftover `skySlider`

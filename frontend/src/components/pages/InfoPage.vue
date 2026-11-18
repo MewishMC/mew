@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { GetChangelog, CheckForUpdate, GetVersion, OpenDownloadLink, OpenDiscordLink, OpenDonationLink } from '../../../wailsjs/go/main/App'
-import { updaterState, downloadUpdate, installUpdate } from '../../utils/updater'
+import { updaterState, startUpdate } from '../../utils/updater'
 
 const currentVersion = ref('')
 const updateInfo = ref(null)
@@ -129,9 +129,9 @@ onMounted(async () => {
         <div class="info-update-icon"><i class="fa fa-arrow-up"></i></div>
 
         <div class="info-update-text">
-          <template v-if="updaterState.state === 'done'">
-            <strong>v{{ updateInfo.latestVersion }} downloaded</strong>
-            <span>{{ updaterState.path }}</span>
+          <template v-if="updaterState.state === 'restarting'">
+            <strong>Installing v{{ updateInfo.latestVersion }}</strong>
+            <span>MEW will close and start again on the new version.</span>
           </template>
           <template v-else-if="updaterState.state === 'error'">
             <strong>Update failed</strong>
@@ -139,34 +139,24 @@ onMounted(async () => {
           </template>
           <template v-else>
             <strong>v{{ updateInfo.latestVersion }} is available</strong>
-            <span v-if="updaterState.state !== 'downloading'">
-              You&rsquo;re on v{{ currentVersion }}. Grab the new build when you&rsquo;re ready.
+            <span>
+              You&rsquo;re on v{{ currentVersion }}. Updating fetches the new build, swaps it in and restarts MEW.
             </span>
-            <span v-else>Downloading to your Downloads folder&hellip;</span>
           </template>
         </div>
 
-        <template v-if="updaterState.state === 'done'">
-          <button class="info-update-btn info-update-solid" @click="installUpdate(updaterState.path)"><i class="fa fa-play"></i> Launch new version</button>
-        </template>
-        <template v-else-if="updaterState.state === 'error'">
-          <button class="info-update-btn" @click="downloadUpdate(updateInfo.downloadUrl)"><i class="fa fa-rotate-right"></i> Retry</button>
-          <button class="info-update-btn" @click="openGitHub(updateInfo.downloadUrl)">GitHub</button>
-        </template>
-        <template v-else-if="updaterState.state === 'downloading'">
-          <div class="info-update-bar">
-            <div class="info-update-fill" :style="{ width: updaterState.percent + '%' }"></div>
-          </div>
-          <span class="info-update-pct">{{ updaterState.total > 0 ? updaterState.percent + '%' : '...' }}</span>
+        <template v-if="updaterState.state === 'error'">
+          <button class="info-update-btn" @click="startUpdate"><i class="fa fa-rotate-right"></i> Retry</button>
+          <button class="info-update-btn" @click="openGitHub(githubURL)">GitHub</button>
         </template>
         <button
-          v-else-if="updateInfo.downloadUrl"
-          class="info-update-btn"
-          @click="downloadUpdate(updateInfo.downloadUrl)"
+          v-else
+          class="info-update-btn info-update-solid"
+          :disabled="updaterState.busy || updaterState.state === 'restarting'"
+          @click="startUpdate"
         >
-          <i class="fa fa-download"></i> Download
+          <i class="fa fa-arrow-up"></i> Update now
         </button>
-        <button v-else class="info-update-btn" @click="openGitHub(githubURL)">View on GitHub</button>
       </div>
 
       <div class="info-facts">
@@ -347,30 +337,6 @@ onMounted(async () => {
 
 .info-update-solid {
   background: var(--accent-light);
-}
-
-.info-update-bar {
-  width: 140px;
-  height: 8px;
-  background: var(--bg-hover-3);
-  border-radius: 999px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.info-update-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 0.15s ease;
-}
-
-.info-update-pct {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  width: 3ch;
-  text-align: right;
-  flex-shrink: 0;
 }
 
 .info-facts {
