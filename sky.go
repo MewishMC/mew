@@ -299,7 +299,7 @@ func buildSkyPack(imageBytes []byte, fileName string, faceSize int, outDir, mani
 
 	mcpackPath := filepath.Join(outDir, packName+".mcpack")
 	if err := zipDirToFile(tempDir, mcpackPath); err != nil {
-		return "", fmt.Errorf("failed to create mcpack: %v", err)
+		return "", fmt.Errorf("failed to create mcpack in %s: %v", outDir, err)
 	}
 	return mcpackPath, nil
 }

@@ -66,9 +66,15 @@ func (a *App) SaveSettings(settings map[string]interface{}) {
 		return
 	}
 	a.settingsMu.Lock()
-	defer a.settingsMu.Unlock()
 	a.settings = settings
 	a.writeSettingsLocked()
+	a.settingsMu.Unlock()
+
+	// The memoised output folder may have been resolved from the old settings
+	// (e.g. before the user fixed the folder's permissions), so drop it.
+	a.outMu.Lock()
+	a.outKey, a.outDir = "", ""
+	a.outMu.Unlock()
 }
 
 func (a *App) ClearCache() error {

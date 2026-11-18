@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -11,6 +12,47 @@ import (
 
 	rar "github.com/nwaples/rardecode/v2"
 )
+
+// createOutputFile opens path for writing, clearing the read-only attribute of
+// an existing file first. Windows answers "Access is denied" when a program
+// opens a read-only file for writing, so re-exporting over a pack the user (or
+// an antivirus/backup tool) marked read-only failed with "failed to create
+// mcpack: open image (1).mcpack: Access is denied" until that file was deleted
+// by hand. The file is an export target either way: os.Create would truncate it.
+func createOutputFile(path string) (*os.File, error) {
+	f, err := os.Create(path)
+	if err == nil {
+		return f, nil
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		return nil, err
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		return nil, err
+	}
+
+	// Chmod with the owner-write bit clears the read-only attribute on Windows.
+	if chmodErr := os.Chmod(path, 0o644); chmodErr != nil {
+		return nil, err
+	}
+	return os.Create(path)
+}
+
+// writeOutputFile is os.WriteFile for an export target, with the same
+// read-only handling as createOutputFile.
+func writeOutputFile(path string, data []byte) error {
+	err := os.WriteFile(path, data, 0o644)
+	if err == nil || !errors.Is(err, fs.ErrPermission) {
+		return err
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		return err
+	}
+	if chmodErr := os.Chmod(path, 0o644); chmodErr != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
 
 // safeArchiveName reduces a file name that came from outside the app (a
 // download, a Content-Disposition header, an archive entry) to a name that can
@@ -151,7 +193,7 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	out, err := createOutputFile(dst)
 	if err != nil {
 		return err
 	}
@@ -180,7 +222,7 @@ func copyDirAll(src, dst string) error {
 }
 
 func createZipFromFolder(srcDir, zipPath string) error {
-	outFile, err := os.Create(zipPath)
+	outFile, err := createOutputFile(zipPath)
 	if err != nil {
 		return err
 	}

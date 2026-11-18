@@ -84,7 +84,7 @@ No CI workflow ran the Go tests (both workflows only built); `dev.yml` now runs
 | --- | --- |
 | `go build ./...` | pass, exit 0, no output |
 | `go vet ./...` | pass, exit 0, no output |
-| `go test ./...` | pass — 47 top-level tests (40 pass, 7 skip), 0 failures; `TestSubwayRed*` still skip without the real pack, and the two vanilla-mirror tests skip only when the mirror is unreachable |
+| `go test ./...` | pass — 51 top-level tests (44 pass, 7 skip), 0 failures; `TestSubwayRed*` still skip without the real pack, and the two vanilla-mirror tests skip only when the mirror is unreachable |
 | gofmt (CR-stripped copies of every `*.go`) | clean, no files listed |
 | `cd frontend && npm run build` | pass, same single chunk-size warning as baseline |
 | `cd frontend && npm audit` | 4 high, 0 critical/moderate — down from 9 (8 high, 1 moderate); the four left are picomatch, which has no fixed release (ISSUES.md SEC-3b) |

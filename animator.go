@@ -174,7 +174,7 @@ func writeGlobalVariables(destDir string, frames int, frameDuration string) erro
 }
 
 func zipDirToFile(srcDir, zipPath string) error {
-	outFile, err := os.Create(zipPath)
+	outFile, err := createOutputFile(zipPath)
 	if err != nil {
 		return err
 	}
@@ -331,7 +331,7 @@ func buildAnimatedPack(gifBytes []byte, fileName string, frameDuration string, o
 
 	mcpackPath := filepath.Join(outDir, packName+".mcpack")
 	if err := zipDirToFile(tempDir, mcpackPath); err != nil {
-		return "", fmt.Errorf("failed to create mcpack: %v", err)
+		return "", fmt.Errorf("failed to create mcpack in %s: %v", outDir, err)
 	}
 	return mcpackPath, nil
 }
@@ -419,7 +419,7 @@ func buildStaticImagePack(imageBytes []byte, fileName string, overlayBytes []byt
 
 	mcpackPath := filepath.Join(outDir, packName+".mcpack")
 	if err := zipDirToFile(tempDir, mcpackPath); err != nil {
-		return "", fmt.Errorf("failed to create mcpack: %v", err)
+		return "", fmt.Errorf("failed to create mcpack in %s: %v", outDir, err)
 	}
 	return mcpackPath, nil
 }

@@ -29,6 +29,10 @@ ISSUES.md; the commands used are in NOTES.md.
   Windows backslashes, which Bedrock would not open).
 - Exports fall back to a writable folder everywhere, not just in the recolor
   export, so porting no longer fails when MEW runs from Program Files.
+- Exporting over an existing **read-only** `.mcpack` (the other cause of
+  `failed to create mcpack: open image (1).mcpack: Access is denied`) now clears
+  the attribute and overwrites it instead of failing on every retry.
+- Export errors name the folder they were writing to.
 - Replacing a texture now refreshes its sidebar thumbnail.
 - The porting flow's dead `deleteMcpack && autoImport` branch is gone.
 - Recent Packs stores the written `.mcpack` path instead of a bare file name.
@@ -45,8 +49,9 @@ ISSUES.md; the commands used are in NOTES.md.
 ## Tooling
 
 - CI runs `go vet ./...` and `go test ./...` before building (it only built).
-- 13 new tests (filename sanitisation/traversal, zip export, thumbnail cache,
-  settings concurrency, session pruning, colour parsing, icon mime type).
+- 17 new tests (filename sanitisation/traversal, zip export and read-only
+  overwrite, output-folder fallback, thumbnail cache, settings concurrency,
+  session pruning, colour parsing, icon mime type).
 - The vanilla-mirror tests skip, instead of failing, when the mirror is
   unreachable, so an offline machine does not go red.
 

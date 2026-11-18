@@ -184,8 +184,8 @@ func (a *App) writeMcpack(zipBytes []byte, fileName string, outDir string, manif
 	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %v", err)
 	}
-	if err := os.WriteFile(outFile, data, 0644); err != nil {
-		return "", fmt.Errorf("failed to write output file: %v", err)
+	if err := writeOutputFile(outFile, data); err != nil {
+		return "", fmt.Errorf("failed to write output file in %s: %v", outDir, err)
 	}
 
 	fmt.Println("Porting finished:", outFile)

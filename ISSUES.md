@@ -7,8 +7,8 @@ Baseline before any change: `go build`, `go vet` and `go test ./...` all passed
 (48 tests, 7 skipped); frontend build passed; `npm audit` reported 9
 vulnerabilities (8 high, 1 moderate). See NOTES.md for the exact commands.
 
-Summary: 37 findings — 1 critical, 7 high, 14 medium, 15 low.
-**28 fixed, 9 won't-fix** (every won't-fix has its reason below).
+Summary: 39 findings — 1 critical, 8 high, 14 medium, 16 low.
+**30 fixed, 9 won't-fix** (every won't-fix has its reason below).
 The second full pass added the "Pass 2" and TEST/CFG entries; the third pass
 found nothing new, and every fix was re-checked with build + vet + test.
 
@@ -33,6 +33,8 @@ found nothing new, and every fix was re-checked with build + vet + test.
 | BUG-1 | fileutil.go (`createZipFromFolder`) | high | Exported packs got Windows backslash zip entry names (`filepath.Rel` result used raw), which Bedrock and POSIX unzip will not open. | **fixed** — `filepath.ToSlash`; covered by `TestCreateZipFromFolder` |
 | BUG-2 | porting.go:300,396,700 | high | Unreachable `if deleteMcpack && autoImport` inside the `else` of the same condition (three copies), so the intended temp-dir path could never run. | **fixed** — removed |
 | BUG-3 | settings.go (`getOutputDir`), porting.go, sky.go, animator.go | high | Only `ExportPack` resolved the output dir to a writable folder. Installed under Program Files, porting/sky/animator exports failed with "access is denied" while recoloring worked. | **fixed** — the fallback now lives in `getOutputDir` (memoised per configured value) |
+| BUG-22 | animator.go (`zipDirToFile`), fileutil.go (`createZipFromFolder`, `copyFile`), porting.go (`writeMcpack`) | high | Exporting over an existing read-only `.mcpack`/texture fails with `failed to create mcpack: open image (1).mcpack: Access is denied` and keeps failing on every retry until the file is deleted by hand (antivirus/backup tools and manual "read-only" flags produce these; verified on Windows: plain `os.Create` on a 0444 file returns exactly that error). | **fixed** — `createOutputFile`/`writeOutputFile` clear the read-only attribute once and retry; `TestWriteOutputFileOverwritesReadOnlyTarget`, `TestCreateZipFromFolderOverwritesReadOnlyTarget` |
+| BUG-23 | sky.go, animator.go, porting.go (export errors) | low | The failure left out *which* folder it was writing to, so "Access is denied" gave no hint that the output directory setting was the problem. | **fixed** — messages now read `failed to create mcpack in <folder>: ...` |
 | BUG-4 | fileutil.go:159 | medium | `defer file.Close()` inside the `WalkFunc` held one handle per file for the whole walk. | **fixed** |
 | BUG-5 | recolor.go (`GetPackThumb`, `SavePackTexture`) | medium | Thumbnail cache keyed by the raw `relPath` but evicted with the cleaned path, so a replaced texture kept its old thumbnail. | **fixed** — shared `thumbCacheKey`; `TestGetPackThumbCacheInvalidatedBySave` |
 | BUG-6 | settings.go | medium | `a.settings` is a plain map shared with Wails goroutines: `GetSettings` mutated it, `SaveSettings` replaced it, `getResourcePacksPath` wrote it while others read it — a concurrent map write panics the app. | **fixed** — `settingsMu`; `GetSettings` returns a snapshot; `TestSettingsConcurrentAccess` |
@@ -82,3 +84,5 @@ found nothing new, and every fix was re-checked with build + vet + test.
 | `TestPruneStaleSessionsKeepsSessionWithoutTimestamp`, `TestPruneStaleSessionsDropsOldSessions` | BUG-18 |
 | `TestParseHexColor` | BUG-19 |
 | `TestGetInstalledPacksDetailedKeepsIconMime` | BUG-13 |
+| `TestWriteOutputFileOverwritesReadOnlyTarget`, `TestCreateZipFromFolderOverwritesReadOnlyTarget` | BUG-22 |
+| `TestGetOutputDirFallsBackForUnusableConfiguredDir`, `TestGetOutputDirRecomputesAfterSaveSettings` | BUG-3 |
