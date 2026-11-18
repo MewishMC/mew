@@ -68,26 +68,17 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ steps.release.outputs.tag }}
-          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}
         run: |
-          export TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python3 -c "
-          import json, sys, os
-          payload = {
-            'content': '<@&1530333141548404786>',
-            'embeds': [{
-              'title': 'MEW ' + os.environ['TAG'] + ' Released!',
-              'url': os.environ['RELEASE_URL'],
-              'color': 15293772,
-              'description': 'A new version of **MEW** is now available!\n\n[Download ' + os.environ['TAG'] + '](' + os.environ['RELEASE_URL'] + ')',
-              'fields': [
-                {'name': 'Version', 'value': os.environ['TAG'], 'inline': True},
-                {'name': 'Platform', 'value': 'Windows (x64)', 'inline': True}
-              ],
-              'footer': {'text': 'MEW - Minecraft Bedrock Texture Pack Manager'},
-              'timestamp': os.environ['TIMESTAMP']
-            }]
+          curl -sS --fail-with-body -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK" <<EOF
+          {
+            "content": "<@&1530333141548404786> **MEW ${TAG}** is out!",
+            "embeds": [
+              {
+                "title": "Download MEW ${TAG}",
+                "url": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
+                "description": "Windows (x64)",
+                "color": 15293772
+              }
+            ]
           }
-          json.dump(payload, sys.stdout)
-          " > /tmp/payload.json
-          curl -H "Content-Type: application/json" -d @/tmp/payload.json "$DISCORD_WEBHOOK"
+          EOF
