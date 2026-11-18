@@ -71,7 +71,7 @@ jobs:
         run: |
           curl -sS --fail-with-body -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK" <<EOF
           {
-            "content": "<@&1530333141548404786> **MEW ${TAG}** is out!",
+            "content": "**MEW ${TAG}** is out!",
             "embeds": [
               {
                 "title": "Download MEW ${TAG}",
