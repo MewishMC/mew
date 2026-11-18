@@ -489,6 +489,18 @@ func (a *App) PortPackFromURL(url string) (string, error) {
 	return result, nil
 }
 
+// operationContext is the cancellable context a batch port runs under. The
+// parent is the Wails startup context, with a plain background context when a
+// port is started before startup finished: context.WithCancel panics on a nil
+// parent, which took the whole process down.
+func (a *App) operationContext() (context.Context, context.CancelFunc) {
+	parent := a.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithCancel(parent)
+}
+
 // setCancelFolder replaces the cancel func a running folder port checks. The
 // UI calls CancelPortFolder from its own goroutine, so the swap is locked.
 func (a *App) setCancelFolder(cancel context.CancelFunc) {
@@ -526,7 +538,7 @@ func (a *App) PortLocalArchive(data []byte, fileName string) error {
 		return fmt.Errorf("not a supported archive")
 	}
 
-	ctx, cancel := context.WithCancel(a.ctx)
+	ctx, cancel := a.operationContext()
 	a.setCancelFolder(cancel)
 	defer func() {
 		a.setCancelFolder(nil)
@@ -645,6 +657,9 @@ func (a *App) PortLocalArchive(data []byte, fileName string) error {
 		a.emitProgress("Partial", fmt.Sprintf("Ported %d pack(s), %d failed.", successCount, failCount), "warning", "", totalFiles, totalFiles)
 	} else if failCount > 0 {
 		a.emitProgress("Error", fmt.Sprintf("All %d pack(s) failed to port.", failCount), "error", "", totalFiles, totalFiles)
+		// Reporting success here told the UI a batch worked when nothing was
+		// written; the caller only ever got a progress event to go on.
+		return fmt.Errorf("all %d pack(s) failed to port", failCount)
 	} else {
 		if deleteOriginals {
 			a.emitProgress("Done", fmt.Sprintf("Ported %d pack(s) to %s.", successCount, outputDir), "success", "", totalFiles, totalFiles)
@@ -675,7 +690,7 @@ func (a *App) PortFolder(url string) error {
 		return fmt.Errorf("no URL provided")
 	}
 
-	ctx, cancel := context.WithCancel(a.ctx)
+	ctx, cancel := a.operationContext()
 	a.setCancelFolder(cancel)
 	defer func() {
 		a.setCancelFolder(nil)
@@ -769,6 +784,9 @@ func (a *App) PortFolder(url string) error {
 		a.emitProgress("Partial", fmt.Sprintf("Ported %d pack(s), %d failed.", successCount, failCount), "warning", "", totalFiles, totalFiles)
 	} else if failCount > 0 {
 		a.emitProgress("Error", fmt.Sprintf("All %d pack(s) failed to port.", failCount), "error", "", totalFiles, totalFiles)
+		// Reporting success here told the UI a batch worked when nothing was
+		// written; the caller only ever got a progress event to go on.
+		return fmt.Errorf("all %d pack(s) failed to port", failCount)
 	} else {
 		if deleteOriginals {
 			a.emitProgress("Done", fmt.Sprintf("Ported %d pack(s) to %s.", successCount, outputDir), "success", "", totalFiles, totalFiles)
@@ -1179,7 +1197,7 @@ func (a *App) ExportCachePacks(packNames []string, basePath string) ([]string, e
 		return nil, fmt.Errorf("no packs selected")
 	}
 	if basePath == "" {
-		basePath = a.getDefaultPackCachePath()
+		basePath = a.packCachePath()
 	}
 	outDir := a.getOutputDir()
 	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {

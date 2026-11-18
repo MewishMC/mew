@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type RecentPack struct {
@@ -91,5 +89,5 @@ func (a *App) AddRecentPack(name, path string) {
 		return
 	}
 	os.WriteFile(a.getRecentPacksPath(), jsonData, 0644)
-	wailsRuntime.EventsEmit(a.ctx, "recent-packs-changed")
+	a.emit("recent-packs-changed")
 }

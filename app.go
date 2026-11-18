@@ -84,9 +84,20 @@ func (a *App) IsDebug() bool {
 	return a.debug
 }
 
+// emit sends a Wails event, but only once startup has handed us a context.
+// Wails treats an invalid context as fatal ("cannot call ... An invalid context
+// was passed") and exits the process, so a bound method invoked before startup
+// - or any future caller without a context - would take the whole app down.
+func (a *App) emit(event string, data ...interface{}) {
+	if a.ctx == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, event, data...)
+}
+
 func (a *App) emitProgress(title, message, icon, fileName string, total, completed int) {
 	a.logDebug(fmt.Sprintf("emitProgress: title=%q msg=%q icon=%q file=%q total=%d done=%d", title, message, icon, fileName, total, completed))
-	wailsRuntime.EventsEmit(a.ctx, "progress", map[string]interface{}{
+	a.emit("progress", map[string]interface{}{
 		"title":     title,
 		"message":   message,
 		"icon":      icon,
@@ -97,7 +108,7 @@ func (a *App) emitProgress(title, message, icon, fileName string, total, complet
 }
 
 func (a *App) emitFinished(title, message, icon string) {
-	wailsRuntime.EventsEmit(a.ctx, "finished", map[string]interface{}{
+	a.emit("finished", map[string]interface{}{
 		"title":   title,
 		"message": message,
 		"icon":    icon,

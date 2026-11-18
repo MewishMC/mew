@@ -117,10 +117,7 @@ type CachePackSource struct {
 }
 
 func (a *App) GetPackCache() []CachePackSource {
-	path := a.getStringSetting("packCachePath")
-	if path == "" {
-		path = a.getDefaultPackCachePath()
-	}
+	path := a.packCachePath()
 	src := CachePackSource{Name: "Minecraft Pack Cache", Path: path}
 	if st, err := os.Stat(path); err == nil && st.IsDir() {
 		src.Found = true
@@ -216,7 +213,10 @@ func (a *App) GetPackListWithInfo() ([]PackListEntry, error) {
 
 func (a *App) GetPackCacheList(basePath string) ([]PackListEntry, error) {
 	if basePath == "" {
-		basePath = a.getDefaultPackCachePath()
+		// Same folder the cache panel advertises: the configured cache, else
+		// the game's. Using the default here listed a different folder than
+		// GetPackCache whenever the user picked their own cache.
+		basePath = a.packCachePath()
 	}
 	return a.listPacksWithInfo(basePath)
 }

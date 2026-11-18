@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // stripJSONComments removes // comments so Bedrock's comment-tolerant json can
@@ -138,10 +136,7 @@ func vanillaCachePath(rel string) (string, error) {
 }
 
 func (a *App) emitVanillaProgress(done, total int) {
-	if a.ctx == nil {
-		return
-	}
-	wailsRuntime.EventsEmit(a.ctx, vanillaProgress, map[string]interface{}{
+	a.emit(vanillaProgress, map[string]interface{}{
 		"done":  done,
 		"total": total,
 	})

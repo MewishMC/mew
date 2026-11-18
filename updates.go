@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,68 @@ import (
 var currentVersion = "1.1.1"
 
 const githubReleasesURL = "https://api.github.com/repos/KyarottoOwO/mew/releases/latest"
+
+var (
+	// updateClient fetches release metadata. downloadClient streams the
+	// installer and only bounds the wait for headers, so a large update on a
+	// slow connection is not cut off mid-transfer (http.Get had no bounds at
+	// all, so a stalled server hung the update forever).
+	updateClient   = &http.Client{Timeout: 10 * time.Second}
+	downloadClient = &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}}
+	// downloadsDir is where DownloadUpdate writes and InstallUpdate looks. It
+	// is a variable so tests never touch the user's real Downloads folder.
+	downloadsDir = userDownloadsDir
+)
+
+// versionNumbers splits "1.2.3" (with an optional v prefix or -suffix) into
+// comparable numbers.
+func versionNumbers(v string) ([]int, bool) {
+	v = strings.TrimPrefix(strings.TrimSpace(strings.ToLower(v)), "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
+	if v == "" {
+		return nil, false
+	}
+	parts := strings.Split(v, ".")
+	nums := make([]int, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, false
+		}
+		nums = append(nums, n)
+	}
+	return nums, true
+}
+
+// versionNewer reports whether latest is a higher version than current.
+// Comparing the strings for inequality offered a downgrade whenever the latest
+// release tag was older than the running build (or "1.9" vs "1.10"); tags that
+// do not parse fall back to inequality so unusual suffixes still notify.
+func versionNewer(latest, current string) bool {
+	l, okL := versionNumbers(latest)
+	c, okC := versionNumbers(current)
+	if !okL || !okC {
+		return latest != current
+	}
+	for i := 0; i < len(l) || i < len(c); i++ {
+		var a, b int
+		if i < len(l) {
+			a = l[i]
+		}
+		if i < len(c) {
+			b = c[i]
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return false
+}
 
 type UpdateInfo struct {
 	NeedsUpdate   bool   `json:"needsUpdate"`
@@ -38,18 +101,20 @@ func (a *App) GetVersion() string {
 }
 
 func (a *App) CheckForUpdate() UpdateInfo {
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", githubReleasesURL, nil)
 	if err != nil {
 		return UpdateInfo{NeedsUpdate: false}
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return UpdateInfo{NeedsUpdate: false}
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return UpdateInfo{NeedsUpdate: false}
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -68,7 +133,7 @@ func (a *App) CheckForUpdate() UpdateInfo {
 	}
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
-	if latestVersion == "" || latestVersion == currentVersion {
+	if latestVersion == "" || !versionNewer(latestVersion, currentVersion) {
 		return UpdateInfo{NeedsUpdate: false}
 	}
 
@@ -109,7 +174,7 @@ func userDownloadsDir() string {
 const updateProgressEvent = "updateProgress"
 
 func (a *App) emitUpdateProgress(downloaded, total int64) {
-	wailsRuntime.EventsEmit(a.ctx, updateProgressEvent, map[string]interface{}{
+	a.emit(updateProgressEvent, map[string]interface{}{
 		"downloaded": downloaded,
 		"total":      total,
 	})
@@ -156,7 +221,7 @@ func (a *App) DownloadUpdate(rawURL string) (string, error) {
 		return "", fmt.Errorf("update downloads are only accepted from GitHub releases")
 	}
 
-	resp, err := http.Get(rawURL)
+	resp, err := downloadClient.Get(rawURL)
 	if err != nil {
 		return "", fmt.Errorf("download failed: %v", err)
 	}
@@ -166,7 +231,7 @@ func (a *App) DownloadUpdate(rawURL string) (string, error) {
 		return "", fmt.Errorf("download failed (HTTP %d)", resp.StatusCode)
 	}
 
-	dir := userDownloadsDir()
+	dir := downloadsDir()
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return "", fmt.Errorf("failed to access downloads folder: %v", err)
 	}
@@ -211,18 +276,20 @@ func (a *App) DownloadUpdate(rawURL string) (string, error) {
 }
 
 func (a *App) GetChangelog() []ChangelogEntry {
-	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", "https://api.github.com/repos/KyarottoOwO/mew/releases", nil)
 	if err != nil {
 		return nil
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := updateClient.Do(req)
 	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -320,7 +387,7 @@ func (a *App) InstallUpdate(path string) error {
 	if err != nil {
 		return fmt.Errorf("invalid update path: %s", path)
 	}
-	if !samePath(filepath.Dir(abs), userDownloadsDir()) {
+	if !samePath(filepath.Dir(abs), downloadsDir()) {
 		return fmt.Errorf("update file is not in your Downloads folder: %s", path)
 	}
 	switch strings.ToLower(filepath.Ext(abs)) {

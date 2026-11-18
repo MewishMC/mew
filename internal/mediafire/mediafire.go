@@ -322,9 +322,26 @@ func ExtractMediaFireDownloadURL(client *http.Client, pageURL string) (string, e
 	return "", fmt.Errorf("could not find download link on MediaFire page")
 }
 
-func extractFilename(resp *http.Response, url string) string {
+func extractFilename(resp *http.Response, rawURL string) string {
 	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
-		re := regexp.MustCompile(`filename[*]?="?([^";\n]+)"?`)
+		// RFC 5987 puts the real (UTF-8) name in filename*=charset'lang'value.
+		// Reading it as a plain filename kept the "UTF-8''" prefix and left
+		// percent escapes in the name.
+		encoded := regexp.MustCompile(`(?i)filename\*\s*=\s*([^;\n]+)`)
+		if m := encoded.FindStringSubmatch(cd); len(m) > 1 {
+			value := strings.Trim(strings.TrimSpace(m[1]), `"`)
+			if i := strings.Index(value, "''"); i >= 0 {
+				value = value[i+2:]
+			}
+			if decoded, err := url.PathUnescape(value); err == nil {
+				value = decoded
+			}
+			if name := sanitizeFilename(value); name != "" {
+				return name
+			}
+		}
+
+		re := regexp.MustCompile(`filename="?([^";\n]+)"?`)
 		matches := re.FindStringSubmatch(cd)
 		if len(matches) > 1 {
 			name := sanitizeFilename(matches[1])
@@ -334,11 +351,16 @@ func extractFilename(resp *http.Response, url string) string {
 		}
 	}
 
-	parts := strings.Split(url, "/")
-	for i := len(parts) - 1; i >= 0; i-- {
-		if parts[i] != "" && strings.Contains(parts[i], ".") {
-			if name := sanitizeFilename(parts[i]); name != "" {
-				return name
+	// Only the path is searched: taking the last dotted segment of the whole URL
+	// named files after the host ("https://dl.example.com/" became
+	// "dl.example.com").
+	if parsed, err := url.Parse(rawURL); err == nil {
+		parts := strings.Split(parsed.Path, "/")
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] != "" && strings.Contains(parts[i], ".") {
+				if name := sanitizeFilename(parts[i]); name != "" {
+					return name
+				}
 			}
 		}
 	}
