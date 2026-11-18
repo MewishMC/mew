@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { parseBedrockCodes } from '../../utils/formatCodes'
 import { CheckPack, GetPackListWithInfo, GetPackCache, GetPackCacheList, ListSessions, DeleteSession } from '../../../wailsjs/go/main/App'
 
 const props = defineProps({
@@ -283,7 +284,7 @@ watch(() => props.active, (isActive) => {
             <img v-if="p.iconURI" :src="p.iconURI" class="pv-card-icon" alt="" />
             <div v-else class="pv-card-icon pv-card-placeholder"><i class="fa fa-box"></i></div>
             <div class="pv-card-info">
-              <div class="pv-card-name" v-html="p.name"></div>
+              <div class="pv-card-name" v-html="parseBedrockCodes(p.name)"></div>
               <div class="pv-card-size">{{ formatBytes(p.size) }}</div>
             </div>
           </div>
@@ -322,7 +323,7 @@ watch(() => props.active, (isActive) => {
                 <img v-if="p.iconURI" :src="p.iconURI" class="pv-card-icon" alt="" />
                 <div v-else class="pv-card-icon pv-card-placeholder"><i class="fa fa-box"></i></div>
                 <div class="pv-card-info">
-                  <div class="pv-card-name" :title="p.description" v-html="p.name"></div>
+                  <div class="pv-card-name" :title="p.description" v-html="parseBedrockCodes(p.name)"></div>
                   <div class="pv-card-size">from cache · {{ formatBytes(p.size) }}</div>
                 </div>
               </div>
