@@ -12,26 +12,29 @@ import (
 )
 
 type App struct {
-	ctx            context.Context
-	cancelMu       sync.Mutex // guards cancelFolder
-	cancelFolder   context.CancelFunc
-	settingsMu     sync.RWMutex // guards settings; Wails calls arrive on their own goroutines
-	settings       map[string]interface{}
-	debug          bool
-	portMu         sync.Mutex
-	activePort     bool
+	ctx             context.Context
+	cancelMu        sync.Mutex // guards cancelFolder
+	cancelFolder    context.CancelFunc
+	settingsMu      sync.RWMutex // guards settings; Wails calls arrive on their own goroutines
+	settings        map[string]interface{}
+	debug           bool
+	portMu          sync.Mutex
+	activePort      bool
 	discordStop     chan struct{}
 	discordStopOnce sync.Once
 	discordConns    map[string]net.Conn
-	discordState   string
-	discordDetails string
-	discordMu      sync.Mutex
-	discordIpcMu   sync.Mutex
-	discordStart   time.Time
-	thumbCache     sync.Map
-	previewMu      sync.Mutex
-	previewSkins   map[string]previewSkin
-	previewGen     int
+	discordState    string
+	discordDetails  string
+	discordMu       sync.Mutex
+	discordIpcMu    sync.Mutex
+	discordStart    time.Time
+	outMu           sync.Mutex // guards the memoised output dir below
+	outKey          string
+	outDir          string
+	thumbCache      sync.Map
+	previewMu       sync.Mutex
+	previewSkins    map[string]previewSkin
+	previewGen      int
 }
 
 func NewApp(debug bool) *App {

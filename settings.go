@@ -85,23 +85,43 @@ func (a *App) getTempDir(subdir string) string {
 	return getMewTempDir(subdir)
 }
 
+// getOutputDir returns the folder exports are written to. The app is often
+// launched from a protected folder (e.g. Program Files), which used to make
+// every export fail with "access is denied", so an unwritable configured dir
+// falls back to Downloads. Only ExportPack used to resolve that fallback, which
+// is why porting, sky and animator exports still failed where recoloring worked.
+//
+// The result is memoised per configured value because the writability probe
+// creates and deletes a temp file.
 func (a *App) getOutputDir() string {
 	a.settingsMu.RLock()
-	defer a.settingsMu.RUnlock()
-	if dir, ok := a.settings["customOutputDir"].(string); ok && dir != "" {
+	dir, _ := a.settings["customOutputDir"].(string)
+	a.settingsMu.RUnlock()
+	if dir == "" {
+		dir = "."
+	}
+
+	a.outMu.Lock()
+	defer a.outMu.Unlock()
+	if a.outKey == dir && a.outDir != "" {
+		return a.outDir
+	}
+	resolved, err := resolveWritableDir(dir)
+	if err != nil {
+		// Keep the configured value: the write itself reports the real error.
+		a.outKey, a.outDir = dir, dir
 		return dir
 	}
-	return "."
+	if resolved != dir {
+		a.logDebug(fmt.Sprintf("output dir %q not writable, falling back to %q", dir, resolved))
+	}
+	a.outKey, a.outDir = dir, resolved
+	return resolved
 }
 
-// resolveOutputDir turns the configured output dir into a directory we can
-// actually write to. The app is often launched from a protected folder (e.g.
-// Program Files), which used to make every export fail with "access is denied".
-func (a *App) resolveOutputDir() (string, error) {
-	candidate := a.getOutputDir()
-	if candidate == "" {
-		candidate = "."
-	}
+// resolveWritableDir turns a configured output dir into a directory that can
+// actually be written to, falling back to the user's Downloads folder.
+func resolveWritableDir(candidate string) (string, error) {
 	abs, err := filepath.Abs(candidate)
 	if err != nil {
 		return "", fmt.Errorf("invalid output directory %q: %v", candidate, err)
@@ -113,11 +133,27 @@ func (a *App) resolveOutputDir() (string, error) {
 	if home, err := os.UserHomeDir(); err == nil {
 		fallback := filepath.Join(home, "Downloads")
 		if err := os.MkdirAll(fallback, 0755); err == nil && dirWritable(fallback) {
-			a.logDebug(fmt.Sprintf("output dir %q not writable, falling back to %q", abs, fallback))
 			return fallback, nil
 		}
 	}
 	return "", fmt.Errorf("no writable output folder (tried %s and your Downloads folder)", abs)
+}
+
+// resolveOutputDir is getOutputDir with the error kept, for callers that have
+// nowhere to write at all.
+func (a *App) resolveOutputDir() (string, error) {
+	dir := a.getOutputDir()
+	if dir == "" {
+		return "", fmt.Errorf("no output directory configured")
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("invalid output directory %q: %v", dir, err)
+	}
+	if !dirWritable(abs) {
+		return "", fmt.Errorf("no writable output folder (tried %s and your Downloads folder)", abs)
+	}
+	return abs, nil
 }
 
 func dirWritable(dir string) bool {

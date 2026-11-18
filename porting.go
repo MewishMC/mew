@@ -357,7 +357,7 @@ func (a *App) portRarPack(rarBytes []byte, fileName string) (string, error) {
 	os.MkdirAll(tempDir, os.ModePerm)
 	defer os.RemoveAll(tempDir)
 
-			rarPath := filepath.Join(tempDir, safeArchiveName(fileName))
+	rarPath := filepath.Join(tempDir, safeArchiveName(fileName))
 	if err := os.WriteFile(rarPath, rarBytes, 0644); err != nil {
 		a.logDebug(fmt.Sprintf("Failed to write RAR to temp: %v", err))
 		return "", fmt.Errorf("failed to write rar file: %v", err)
