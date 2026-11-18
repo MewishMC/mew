@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { GetAllRecentPacks } from '../../../wailsjs/go/main/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 
 import { parseBedrockCodes } from '../../utils/formatCodes'
 const recentPacks = ref([])
 const isMounted = ref(false)
+let offRecentPacks = null
 
 async function loadPacks() {
   try {
@@ -44,9 +45,18 @@ function formatTimestamp(ts) {
 onMounted(() => {
   isMounted.value = true
   loadPacks()
-  EventsOn('recent-packs-changed', () => {
+  // Mounted with v-if, so the handler must be dropped again on unmount.
+  offRecentPacks = EventsOn('recent-packs-changed', () => {
     if (isMounted.value) loadPacks()
   })
+})
+
+onUnmounted(() => {
+  isMounted.value = false
+  if (offRecentPacks) {
+    offRecentPacks()
+    offRecentPacks = null
+  }
 })
 </script>
 

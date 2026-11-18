@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { GetRecentPacks } from '../../../wailsjs/go/main/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 
@@ -10,6 +10,7 @@ const showSuite = ref(false)
 const hasAnimated = ref(false)
 const isMounted = ref(false)
 const recentPacks = ref([])
+let offRecentPacks = null
 
 async function loadRecentPacks() {
   try {
@@ -31,9 +32,19 @@ onMounted(() => {
     setTimeout(() => { hasAnimated.value = true }, 3500)
   }
   loadRecentPacks()
-  EventsOn('recent-packs-changed', () => {
+  // The home page is mounted with v-if, so every visit mounts it again; the
+  // handler has to be dropped on unmount or the listeners pile up.
+  offRecentPacks = EventsOn('recent-packs-changed', () => {
     if (isMounted.value) loadRecentPacks()
   })
+})
+
+onUnmounted(() => {
+  isMounted.value = false
+  if (offRecentPacks) {
+    offRecentPacks()
+    offRecentPacks = null
+  }
 })
 </script>
 
