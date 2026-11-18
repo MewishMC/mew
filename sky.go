@@ -85,6 +85,10 @@ func clamp(v, lo, hi float64) float64 {
 func sampleBilinear(src image.Image, bounds image.Rectangle, u, v float64) (uint8, uint8, uint8, uint8) {
 	srcW := float64(bounds.Dx())
 	srcH := float64(bounds.Dy())
+	if srcW < 1 || srcH < 1 {
+		// Nothing to sample; avoids a divide by zero below.
+		return 0, 0, 0, 0
+	}
 
 	u = math.Mod(u, srcW)
 	if u < 0 {

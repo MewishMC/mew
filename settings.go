@@ -22,28 +22,53 @@ func (a *App) getSettingsPath() string {
 	return filepath.Join(dir, "settings.json")
 }
 
-func (a *App) GetSettings() map[string]interface{} {
-	data, err := os.ReadFile(a.getSettingsPath())
-	if err != nil {
-		return a.settings
+// settingsSnapshot copies the settings map, so Wails marshals a map that is not
+// being written by another call at the same time. The caller must hold at least
+// a read lock.
+func (a *App) settingsSnapshotLocked() map[string]interface{} {
+	out := make(map[string]interface{}, len(a.settings))
+	for k, v := range a.settings {
+		out[k] = v
 	}
-	var loaded map[string]interface{}
-	if err := json.Unmarshal(data, &loaded); err != nil {
-		return a.settings
-	}
-	for k, v := range loaded {
-		a.settings[k] = v
-	}
-	return a.settings
+	return out
 }
 
-func (a *App) SaveSettings(settings map[string]interface{}) {
-	a.settings = settings
-	jsonData, err := json.MarshalIndent(settings, "", "  ")
+// writeSettingsLocked persists the current settings. The caller holds the lock.
+func (a *App) writeSettingsLocked() {
+	jsonData, err := json.MarshalIndent(a.settings, "", "  ")
 	if err != nil {
 		return
 	}
 	os.WriteFile(a.getSettingsPath(), jsonData, 0644)
+}
+
+func (a *App) GetSettings() map[string]interface{} {
+	data, err := os.ReadFile(a.getSettingsPath())
+
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
+
+	if err == nil {
+		var loaded map[string]interface{}
+		if err := json.Unmarshal(data, &loaded); err == nil {
+			for k, v := range loaded {
+				a.settings[k] = v
+			}
+		}
+	}
+	return a.settingsSnapshotLocked()
+}
+
+func (a *App) SaveSettings(settings map[string]interface{}) {
+	// A null from the UI would install a nil map, and the first later write to
+	// it (SetResourcePacksPath, the levi path fix-up) would panic.
+	if settings == nil {
+		return
+	}
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
+	a.settings = settings
+	a.writeSettingsLocked()
 }
 
 func (a *App) ClearCache() error {
@@ -61,6 +86,8 @@ func (a *App) getTempDir(subdir string) string {
 }
 
 func (a *App) getOutputDir() string {
+	a.settingsMu.RLock()
+	defer a.settingsMu.RUnlock()
 	if dir, ok := a.settings["customOutputDir"].(string); ok && dir != "" {
 		return dir
 	}
@@ -105,6 +132,8 @@ func dirWritable(dir string) bool {
 }
 
 func (a *App) getBoolSetting(key string) bool {
+	a.settingsMu.RLock()
+	defer a.settingsMu.RUnlock()
 	if val, ok := a.settings[key].(bool); ok {
 		return val
 	}
@@ -112,6 +141,8 @@ func (a *App) getBoolSetting(key string) bool {
 }
 
 func (a *App) getStringSetting(key string) string {
+	a.settingsMu.RLock()
+	defer a.settingsMu.RUnlock()
 	if val, ok := a.settings[key].(string); ok {
 		return val
 	}
@@ -119,6 +150,8 @@ func (a *App) getStringSetting(key string) string {
 }
 
 func (a *App) getStringArraySetting(key string) []string {
+	a.settingsMu.RLock()
+	defer a.settingsMu.RUnlock()
 	if val, ok := a.settings[key].([]string); ok {
 		return val
 	}
@@ -255,20 +288,27 @@ func (a *App) DetectMinecraftPaths() []MinecraftPath {
 // A configured path is honored unless it points at an outdated levilauncher
 // version — in that case the newest installed version wins.
 func (a *App) getResourcePacksPath() string {
-	if p, ok := a.settings["resourcePacksPath"].(string); ok && p != "" {
+	a.settingsMu.Lock()
+	p, _ := a.settings["resourcePacksPath"].(string)
+	if p != "" {
 		if st, err := os.Stat(p); err == nil && st.IsDir() {
 			if ver := leviVersionFromPath(p); ver != "" {
 				if newest := newestLeviResourcePacks(); newest != "" && newest != p && compareVersions(ver, leviVersionFromPath(newest)) < 0 {
-					a.logDebug(fmt.Sprintf("mew: resourcePacksPath %q points to older levilauncher version %s, switching to %s", p, ver, newest))
 					a.settings["resourcePacksPath"] = newest
-					a.SaveSettings(a.settings)
+					a.writeSettingsLocked()
+					a.settingsMu.Unlock()
+					a.logDebug(fmt.Sprintf("mew: resourcePacksPath %q points to older levilauncher version %s, switching to %s", p, ver, newest))
 					return newest
 				}
 			}
+			a.settingsMu.Unlock()
 			return p
 		}
+		a.settingsMu.Unlock()
 		a.logDebug(fmt.Sprintf("mew: configured resourcePacksPath %q not found, falling back to detection", p))
+		return a.getDefaultResourcePacksPath()
 	}
+	a.settingsMu.Unlock()
 	return a.getDefaultResourcePacksPath()
 }
 
@@ -299,7 +339,9 @@ func (a *App) SetResourcePacksPath(path string) (ResourcePacksInfo, error) {
 	if err != nil || !st.IsDir() {
 		return ResourcePacksInfo{}, fmt.Errorf("please choose a valid folder")
 	}
+	a.settingsMu.Lock()
 	a.settings["resourcePacksPath"] = path
-	a.SaveSettings(a.settings)
+	a.writeSettingsLocked()
+	a.settingsMu.Unlock()
 	return a.GetInstalledPacks(), nil
 }

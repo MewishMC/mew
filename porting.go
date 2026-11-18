@@ -173,6 +173,8 @@ func (a *App) buildMcpackBytes(zipBytes []byte, fileName string, manifestDesc st
 }
 
 func (a *App) writeMcpack(zipBytes []byte, fileName string, outDir string, manifestDesc string) (string, error) {
+	// fileName can come from a download, so it must never choose the folder.
+	fileName = safeArchiveName(fileName)
 	data, err := a.buildMcpackBytes(zipBytes, fileName, manifestDesc)
 	if err != nil {
 		return "", err
@@ -308,6 +310,10 @@ func (a *App) PortPack(bytes []byte, fileName string) (string, error) {
 
 	mcpackDesc := a.getStringSetting("manifestDescription")
 
+	// Where the pack landed, for the Recent Packs entry. It used to be the bare
+	// file name, which the UI then could not open.
+	recentPath := a.getOutputDir()
+
 	if a.getBoolSetting("deleteMcpack") && a.getBoolSetting("autoImport") {
 		a.logDebug("deleteMcpack + autoImport: importing directly from memory, no .mcpack on disk")
 		mcpackBytes, err := a.buildMcpackBytes(out, fileName, mcpackDesc)
@@ -318,10 +324,6 @@ func (a *App) PortPack(bytes []byte, fileName string) (string, error) {
 		a.importFromBytes(mcpackBytes, fileName)
 	} else {
 		mcpackDir := a.getOutputDir()
-		if a.getBoolSetting("deleteMcpack") && a.getBoolSetting("autoImport") {
-			mcpackDir = a.getTempDir("mcpack")
-			os.MkdirAll(mcpackDir, os.ModePerm)
-		}
 		outFile, err := a.writeMcpack(out, fileName, mcpackDir, mcpackDesc)
 		if err != nil {
 			a.logDebug(fmt.Sprintf("writeMcpack failed: %v", err))
@@ -329,6 +331,7 @@ func (a *App) PortPack(bytes []byte, fileName string) (string, error) {
 			return "", fmt.Errorf("failed to write mcpack: %v", err)
 		}
 		a.logDebug(fmt.Sprintf("writeMcpack succeeded: %s", outFile))
+		recentPath = outFile
 		if a.getBoolSetting("autoImport") {
 			a.logDebug("Auto-import enabled, importing to Bedrock...")
 			a.importToBedrock(outFile)
@@ -341,7 +344,7 @@ func (a *App) PortPack(bytes []byte, fileName string) (string, error) {
 	}
 
 	a.emitProgress("Done", fileName, "success", fileName, 0, 0)
-	a.AddRecentPack(fileName, fileName)
+	a.AddRecentPack(fileName, recentPath)
 	a.logDebug("PortPack completed successfully")
 	return fileName, nil
 }
@@ -354,7 +357,7 @@ func (a *App) portRarPack(rarBytes []byte, fileName string) (string, error) {
 	os.MkdirAll(tempDir, os.ModePerm)
 	defer os.RemoveAll(tempDir)
 
-	rarPath := filepath.Join(tempDir, fileName)
+			rarPath := filepath.Join(tempDir, safeArchiveName(fileName))
 	if err := os.WriteFile(rarPath, rarBytes, 0644); err != nil {
 		a.logDebug(fmt.Sprintf("Failed to write RAR to temp: %v", err))
 		return "", fmt.Errorf("failed to write rar file: %v", err)
@@ -418,10 +421,6 @@ func (a *App) portRarPack(rarBytes []byte, fileName string) (string, error) {
 			results = append(results, zName)
 		} else {
 			mcpackDir := a.getOutputDir()
-			if a.getBoolSetting("deleteMcpack") && a.getBoolSetting("autoImport") {
-				mcpackDir = a.getTempDir("mcpack")
-				os.MkdirAll(mcpackDir, os.ModePerm)
-			}
 			outFile, err := a.writeMcpack(out, zName, mcpackDir, a.getStringSetting("manifestDescription"))
 			if err != nil {
 				a.logDebug(fmt.Sprintf("Failed to write mcpack for %s: %v", zName, err))
@@ -490,9 +489,20 @@ func (a *App) PortPackFromURL(url string) (string, error) {
 	return result, nil
 }
 
+// setCancelFolder replaces the cancel func a running folder port checks. The
+// UI calls CancelPortFolder from its own goroutine, so the swap is locked.
+func (a *App) setCancelFolder(cancel context.CancelFunc) {
+	a.cancelMu.Lock()
+	a.cancelFolder = cancel
+	a.cancelMu.Unlock()
+}
+
 func (a *App) CancelPortFolder() {
-	if a.cancelFolder != nil {
-		a.cancelFolder()
+	a.cancelMu.Lock()
+	cancel := a.cancelFolder
+	a.cancelMu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 }
 
@@ -517,9 +527,9 @@ func (a *App) PortLocalArchive(data []byte, fileName string) error {
 	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
-	a.cancelFolder = cancel
+	a.setCancelFolder(cancel)
 	defer func() {
-		a.cancelFolder = nil
+		a.setCancelFolder(nil)
 		cancel()
 	}()
 
@@ -666,9 +676,9 @@ func (a *App) PortFolder(url string) error {
 	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
-	a.cancelFolder = cancel
+	a.setCancelFolder(cancel)
 	defer func() {
-		a.cancelFolder = nil
+		a.setCancelFolder(nil)
 		cancel()
 	}()
 
@@ -801,6 +811,7 @@ func (a *App) processPack(ctx context.Context, name string, data []byte, totalFi
 		return false
 	}
 
+	name = safeArchiveName(name)
 	zipPath := filepath.Join(tempDir, name)
 	if err := os.WriteFile(zipPath, data, 0644); err != nil {
 		logError(formatError(fmt.Sprintf("write temp file failed: %s", name), err))
@@ -880,10 +891,6 @@ func (a *App) processPack(ctx context.Context, name string, data []byte, totalFi
 			a.AddRecentPack(c.Name, c.Name)
 		} else {
 			mcpackDir := bedrockDir
-			if a.getBoolSetting("deleteMcpack") && a.getBoolSetting("autoImport") {
-				mcpackDir = a.getTempDir("mcpack")
-				os.MkdirAll(mcpackDir, os.ModePerm)
-			}
 			reportOut, reportErr := a.writeMcpack(out, c.Name, mcpackDir, a.getStringSetting("manifestDescription"))
 			if reportErr != nil {
 				logError(formatError(fmt.Sprintf("write mcpack failed: %s", c.Name), reportErr))

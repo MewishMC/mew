@@ -13,13 +13,16 @@ import (
 
 type App struct {
 	ctx            context.Context
+	cancelMu       sync.Mutex // guards cancelFolder
 	cancelFolder   context.CancelFunc
+	settingsMu     sync.RWMutex // guards settings; Wails calls arrive on their own goroutines
 	settings       map[string]interface{}
 	debug          bool
 	portMu         sync.Mutex
 	activePort     bool
-	discordStop    chan struct{}
-	discordConns   map[string]net.Conn
+	discordStop     chan struct{}
+	discordStopOnce sync.Once
+	discordConns    map[string]net.Conn
 	discordState   string
 	discordDetails string
 	discordMu      sync.Mutex
@@ -50,6 +53,7 @@ func NewApp(debug bool) *App {
 			"recolorAutosave":     true,
 		},
 		discordConns: map[string]net.Conn{},
+		discordStop:  make(chan struct{}),
 	}
 }
 

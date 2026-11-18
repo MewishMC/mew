@@ -44,8 +44,13 @@ type AnimMergeTarget struct {
 func parseHexColor(hex string) color.RGBA {
 	hex = strings.TrimSpace(hex)
 	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) == 3 {
+	switch len(hex) {
+	case 3:
 		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+	case 8:
+		// #RRGGBBAA: the canvas background is opaque (see transparentFill),
+		// so only the colour channels are meaningful here.
+		hex = hex[:6]
 	}
 	val, err := strconv.ParseUint(hex, 16, 32)
 	if err != nil {
@@ -622,7 +627,7 @@ func (a *App) mergeAnimIntoTarget(destDir, extractDir string) bool {
 		a.logDebug(fmt.Sprintf("mergeAnimatedPack: _global_variables merge warning: %v", mergeErr))
 	}
 	a.logDebug(fmt.Sprintf("mergeAnimatedPack: copied %d files into %s", copied, destDir))
-	return true
+	return copied > 0
 }
 
 func stripInventoryFiles(destDir string) {

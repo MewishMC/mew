@@ -16,6 +16,7 @@ const (
 
 var (
 	errLogMu            sync.Mutex
+	errLogDirMu         sync.Mutex
 	errLogDir           string
 	debugConsoleEnabled bool
 )
@@ -37,6 +38,10 @@ func consoleLog(color, msg string) {
 }
 
 func getErrLogDir() string {
+	// Callers reach this from several goroutines (renders, porting, Discord);
+	// the lazily cached path needs its own lock.
+	errLogDirMu.Lock()
+	defer errLogDirMu.Unlock()
 	if errLogDir != "" {
 		return errLogDir
 	}

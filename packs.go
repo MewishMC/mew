@@ -251,12 +251,10 @@ func (a *App) GetInstalledPacksDetailed() DetailedPacksInfo {
 			}
 		}
 
-		for _, iconBase := range []string{"pack_icon.png", "pack_icon.jpeg", "pack_icon.jpg"} {
-			iconPath := filepath.Join(packDir, iconBase)
-			if iconData, iErr := os.ReadFile(iconPath); iErr == nil {
-				pi.Icon = "data:image/png;base64," + base64.StdEncoding.EncodeToString(iconData)
-				break
-			}
+		// readImageAsDataURI picks the right mime type per extension; serving a
+		// JPEG as image/png left such packs without a visible icon.
+		if iconPath := findFirstImage(packDir, "pack_icon"); iconPath != "" {
+			pi.Icon = a.readImageAsDataURI(iconPath)
 		}
 
 		info.Packs = append(info.Packs, pi)
@@ -743,8 +741,10 @@ func (a *App) GetPackMenuFiles(packName string) ([]string, error) {
 
 func (a *App) GetPackMenuContent(packName string, filePath string) (string, error) {
 	dir := a.getPackDir(packName)
-	guard := filepath.Clean(filePath)
-	if strings.ContainsAny(guard, "/\\") || guard == "." || guard == ".." || strings.HasPrefix(guard, "..") {
+	// GetPackMenuFiles lists nested files (e.g. "sub/screen.json"), so a plain
+	// single-segment guard made everything below the top level unreadable.
+	guard, err := safeRelPath(filePath)
+	if err != nil {
 		return "", fmt.Errorf("invalid path")
 	}
 	contentPath := filepath.Join(dir, "ui", guard)
@@ -996,7 +996,15 @@ func (a *App) GetImages(sessionId string, folder string) ([]FolderImage, error) 
 		return nil, err
 	}
 
-	fullPath := filepath.Join(sessionDir, filepath.FromSlash(folder))
+	// The folder the recolor tool asks for must stay inside its session.
+	fullPath := sessionDir
+	if trimmed := strings.TrimSpace(folder); trimmed != "" {
+		clean, err := safeRelPath(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("invalid folder: %v", err)
+		}
+		fullPath = filepath.Join(sessionDir, clean)
+	}
 
 	var images []FolderImage
 

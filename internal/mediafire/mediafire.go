@@ -50,7 +50,7 @@ func DownloadFromURL(url string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := readAllLimited(resp.Body, maxDownloadBytes)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read response body: %v", err)
 	}
@@ -58,6 +58,22 @@ func DownloadFromURL(url string) ([]byte, string, error) {
 	filename := extractFilename(resp, url)
 
 	return data, filename, nil
+}
+
+// maxDownloadBytes caps a single download. Without it a hostile or broken
+// server can stream until the process runs out of memory, which in a desktop app
+// means the window simply disappears.
+const maxDownloadBytes = 512 << 20 // 512 MiB
+
+func readAllLimited(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("file is larger than %d MB", limit>>20)
+	}
+	return data, nil
 }
 
 func IsMediaFireURL(url string) bool {
@@ -112,10 +128,15 @@ func ExtractMediaFireFolderLinks(client *http.Client, folderURL string) ([]media
 		Response mfResponse `json:"response"`
 	}
 
+	// The folder key comes from a URL the user pasted, so it is escaped into the
+	// query instead of being spliced in raw ("k&content_type=x" would otherwise
+	// rewrite the request). The chunk loop is capped so a server that always
+	// answers "more_chunks: yes" cannot keep the app paginating forever.
+	const maxFolderChunks = 100
 	var allFiles []mediaFireFileEntry
 	chunk := 1
 	for {
-		apiURL := fmt.Sprintf("%s/folder/get_content.php?folder_key=%s&content_type=files&response_format=json&chunk=%d&first_item=1&last_item=100", mediaFireAPIBase, folderKey, chunk)
+		apiURL := fmt.Sprintf("%s/folder/get_content.php?folder_key=%s&content_type=files&response_format=json&chunk=%d&first_item=1&last_item=100", mediaFireAPIBase, url.QueryEscape(folderKey), chunk)
 
 		req, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
@@ -127,8 +148,12 @@ func ExtractMediaFireFolderLinks(client *http.Client, folderURL string) ([]media
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch MediaFire API: %v", err)
 		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("MediaFire API returned HTTP %d", resp.StatusCode)
+		}
 
-		body, err := io.ReadAll(resp.Body)
+		body, err := readAllLimited(resp.Body, 8<<20)
 		resp.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read API response: %v", err)
@@ -164,7 +189,7 @@ func ExtractMediaFireFolderLinks(client *http.Client, folderURL string) ([]media
 			})
 		}
 
-		if len(files) < 100 || strings.EqualFold(apiResp.Response.FolderContent.MoreChunks, "no") {
+		if len(files) < 100 || strings.EqualFold(apiResp.Response.FolderContent.MoreChunks, "no") || chunk >= maxFolderChunks {
 			break
 		}
 		chunk++
@@ -204,7 +229,7 @@ func DownloadDirect(client *http.Client, url string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("got HTML instead of file (likely a bad download link)")
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := readAllLimited(resp.Body, maxDownloadBytes)
 	if err != nil {
 		return nil, "", err
 	}
@@ -302,8 +327,7 @@ func extractFilename(resp *http.Response, url string) string {
 		re := regexp.MustCompile(`filename[*]?="?([^";\n]+)"?`)
 		matches := re.FindStringSubmatch(cd)
 		if len(matches) > 1 {
-			name := strings.TrimSpace(matches[1])
-			name = strings.Trim(name, `"`)
+			name := sanitizeFilename(matches[1])
 			if name != "" {
 				return name
 			}
@@ -313,9 +337,36 @@ func extractFilename(resp *http.Response, url string) string {
 	parts := strings.Split(url, "/")
 	for i := len(parts) - 1; i >= 0; i-- {
 		if parts[i] != "" && strings.Contains(parts[i], ".") {
-			return parts[i]
+			if name := sanitizeFilename(parts[i]); name != "" {
+				return name
+			}
 		}
 	}
 
 	return "download.zip"
+}
+
+// sanitizeFilename reduces a server supplied name to a plain base name. The name
+// is later joined onto a temp or output folder, so a value carrying "..\\", an
+// absolute path or a drive letter would let the server choose where MEW writes.
+// Returns "" when nothing usable is left.
+func sanitizeFilename(name string) string {
+	name = strings.TrimSpace(name)
+	// Names from a URL are percent-encoded; decode first so "%2F..%2F" is
+	// seen as the traversal it is rather than kept as literal characters.
+	if decoded, err := url.PathUnescape(name); err == nil {
+		name = decoded
+	}
+	name = strings.ReplaceAll(name, "\\", "/")
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || strings.ContainsRune(`<>:"/\\|?*`, r) {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.Trim(name, " .")
+	return name
 }

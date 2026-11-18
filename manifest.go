@@ -262,8 +262,19 @@ func (a *App) GetManifestFromUpload(bytes []byte) (map[string]interface{}, error
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, fmt.Errorf("failed to prepare temp folder: %v", err)
 	}
-	tmpFile := filepath.Join(os.TempDir(), "mew-manifest-pack.zip")
-	if err := os.WriteFile(tmpFile, bytes, 0644); err != nil {
+	// A per-call temp file: a fixed name collides between two uploads.
+	tmp, err := os.CreateTemp("", "mew-manifest-*.zip")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %v", err)
+	}
+	tmpFile := tmp.Name()
+	if _, err := tmp.Write(bytes); err != nil {
+		tmp.Close()
+		os.Remove(tmpFile)
+		return nil, fmt.Errorf("failed to write temp file: %v", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpFile)
 		return nil, fmt.Errorf("failed to write temp file: %v", err)
 	}
 	defer os.Remove(tmpFile)

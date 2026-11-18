@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,10 +135,25 @@ func (w *updateProgressWriter) Write(p []byte) (int, error) {
 // DownloadUpdate downloads the newest MEW installer into the Downloads folder
 // and returns the saved file path. Progress is reported through the
 // "updateProgress" event, throttled during the transfer.
+// allowedUpdateURL reports whether a download URL is a GitHub release asset, the
+// only place MEW's own updates come from. The URL arrives from the UI, so it is
+// validated rather than trusted.
+func allowedUpdateURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "github.com" || host == "api.github.com" || strings.HasSuffix(host, ".githubusercontent.com")
+}
+
 func (a *App) DownloadUpdate(rawURL string) (string, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
 		return "", fmt.Errorf("no download URL provided")
+	}
+	if !allowedUpdateURL(rawURL) {
+		return "", fmt.Errorf("update downloads are only accepted from GitHub releases")
 	}
 
 	resp, err := http.Get(rawURL)
@@ -159,9 +175,10 @@ func (a *App) DownloadUpdate(rawURL string) (string, error) {
 	tmpPath := filepath.Join(dir, fileName+".part")
 	finalPath := filepath.Join(dir, fileName)
 
-	// Make sure we end up with a plain "mew.exe", overwriting any earlier copy.
+	// Dropping the caller's earlier copy here meant a failed download left them
+	// with no installer at all, so the old one is only removed once the new one
+	// has fully arrived.
 	_ = os.Remove(tmpPath)
-	_ = os.Remove(finalPath)
 
 	out, err := os.Create(tmpPath)
 	if err != nil {
@@ -182,6 +199,7 @@ func (a *App) DownloadUpdate(rawURL string) (string, error) {
 		os.Remove(tmpPath)
 		return "", fmt.Errorf("download failed: %v", closeErr)
 	}
+	_ = os.Remove(finalPath)
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		os.Remove(tmpPath)
 		return "", fmt.Errorf("failed to save update: %v", err)
@@ -296,7 +314,21 @@ func (a *App) InstallUpdate(path string) error {
 	if st, err := os.Stat(path); err != nil || st.IsDir() {
 		return fmt.Errorf("update file not found: %s", path)
 	}
-	cmd := exec.Command(path)
+	// Only run the installer DownloadUpdate wrote into Downloads. Without this
+	// any path the UI could be made to send would be executed.
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("invalid update path: %s", path)
+	}
+	if !samePath(filepath.Dir(abs), userDownloadsDir()) {
+		return fmt.Errorf("update file is not in your Downloads folder: %s", path)
+	}
+	switch strings.ToLower(filepath.Ext(abs)) {
+	case ".exe", ".msi":
+	default:
+		return fmt.Errorf("not an installer: %s", filepath.Base(abs))
+	}
+	cmd := exec.Command(abs)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start installer: %v", err)
 	}

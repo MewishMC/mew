@@ -74,12 +74,17 @@ type discordButton struct {
 }
 
 func (a *App) startDiscordRPC() {
-	if discordClientID == "" {
+	if discordClientID == "" || !a.discordAvailable() {
 		return
 	}
 	a.discordStart = time.Now()
-	a.discordStop = make(chan struct{})
 	go a.discordLoop()
+}
+
+// discordAvailable reports whether a stop channel exists. NewApp creates it, so
+// the loop and stopDiscordRPC never race on the field.
+func (a *App) discordAvailable() bool {
+	return a.discordStop != nil
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -87,10 +92,13 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 func (a *App) stopDiscordRPC() {
-	if a.discordStop != nil {
-		close(a.discordStop)
-		a.discordStop = nil
-	}
+	// close() is idempotent here: the channel is created once in NewApp and
+	// never replaced, so the loop reading it cannot race with a write.
+	a.discordStopOnce.Do(func() {
+		if a.discordStop != nil {
+			close(a.discordStop)
+		}
+	})
 	a.discordClose()
 }
 
@@ -104,13 +112,18 @@ func (a *App) discordLoop() {
 
 		if !a.getBoolSetting("discordRPC") {
 			a.discordClose()
-			time.Sleep(5 * time.Second)
-			continue
+		} else {
+			a.discordReconcile()
+			a.refreshDiscordActivity()
 		}
 
-		a.discordReconcile()
-		a.refreshDiscordActivity()
-		time.Sleep(5 * time.Second)
+		// Waiting on the stop channel (rather than sleeping) lets shutdown end
+		// the loop immediately instead of up to 5s later.
+		select {
+		case <-a.discordStop:
+			return
+		case <-time.After(5 * time.Second):
+		}
 	}
 }
 

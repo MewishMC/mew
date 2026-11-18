@@ -192,14 +192,17 @@ func (a *App) pruneStaleSessions() {
 			continue
 		}
 
+		// The directory's own mtime is the fallback: metadata can be missing,
+		// unreadable, or written without an updatedAt, and treating that as the
+		// epoch used to delete a session the user was still working in.
 		meta, metaErr := a.readSessionMeta(e.Name())
-		updated := time.UnixMilli(meta.UpdatedAt)
-		if metaErr != nil {
-			if info, statErr := e.Info(); statErr == nil {
-				updated = info.ModTime()
-			}
+		var updated time.Time
+		if metaErr == nil && meta.UpdatedAt > 0 {
+			updated = time.UnixMilli(meta.UpdatedAt)
+		} else if info, statErr := e.Info(); statErr == nil {
+			updated = info.ModTime()
 		}
-		if now.Sub(updated) > sessionMaxAge {
+		if !updated.IsZero() && now.Sub(updated) > sessionMaxAge {
 			a.logDebug(fmt.Sprintf("pruneStaleSessions: removing stale session %s", e.Name()))
 			os.RemoveAll(path)
 			os.Remove(a.sessionMetaPath(e.Name()))

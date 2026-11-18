@@ -123,13 +123,16 @@ func (a *App) GetPackTexture(packName string, relPath string, basePath string) (
 	return a.readImageAsDataURI(full), nil
 }
 
+// thumbCacheKey names one pack texture's cached thumbnail. Both the read and
+// the eviction path must build it the same way, or a replaced texture keeps
+// showing its old thumbnail (the paths differ: "a/b.png" vs "a\\b.png").
+func thumbCacheKey(packName, basePath, cleanRel string) string {
+	return "thumb\x00" + packName + "\x00" + basePath + "\x00" + cleanRel
+}
+
 // GetPackThumb decodes a texture and returns a small PNG data URI (max 96px)
 // for fast sidebar thumbnails, avoiding full-size transfers over IPC.
 func (a *App) GetPackThumb(packName string, relPath string, basePath string) (string, error) {
-	cacheKey := packName + "\x00" + basePath + "\x00" + relPath
-	if v, ok := a.thumbCache.Load(cacheKey); ok {
-		return v.(string), nil
-	}
 	root, err := a.getPackRoot(basePath, packName)
 	if err != nil {
 		return "", err
@@ -137,6 +140,10 @@ func (a *App) GetPackThumb(packName string, relPath string, basePath string) (st
 	clean, err := safeRelPath(relPath)
 	if err != nil {
 		return "", err
+	}
+	cacheKey := thumbCacheKey(packName, basePath, clean)
+	if v, ok := a.thumbCache.Load(cacheKey); ok {
+		return v.(string), nil
 	}
 	full := filepath.Join(root, clean)
 	if !strings.HasPrefix(full, root+string(filepath.Separator)) {
@@ -223,7 +230,7 @@ func (a *App) SavePackTexture(packName string, relPath string, imageData string,
 	if err := os.WriteFile(full, decoded, 0644); err != nil {
 		return fmt.Errorf("failed to write texture: %v", err)
 	}
-	a.thumbCache.Delete(packName + "\x00" + basePath + "\x00" + clean)
+	a.thumbCache.Delete(thumbCacheKey(packName, basePath, clean))
 	a.logDebug(fmt.Sprintf("SavePackTexture: wrote %s", full))
 	return nil
 }

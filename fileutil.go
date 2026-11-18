@@ -5,11 +5,34 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	rar "github.com/nwaples/rardecode/v2"
 )
+
+// safeArchiveName reduces a file name that came from outside the app (a
+// download, a Content-Disposition header, an archive entry) to a name that can
+// only ever create a file in the folder it is joined with. A name carrying
+// "..\\" or a drive letter would otherwise let a remote server choose where the
+// app writes.
+func safeArchiveName(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = path.Base(name)
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || strings.ContainsRune(`<>:"/\\|?*`, r) {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.Trim(name, " .")
+	if name == "" {
+		return "pack.zip"
+	}
+	return name
+}
 
 func isRarFile(path string) bool {
 	lower := strings.ToLower(path)
@@ -179,7 +202,9 @@ func createZipFromFolder(srcDir, zipPath string) error {
 			return err
 		}
 
-		f, err := w.Create(relPath)
+		// Zip entry names are always slash separated; on Windows filepath.Rel
+		// returns backslashes, which some readers (and Bedrock) will not open.
+		f, err := w.Create(filepath.ToSlash(relPath))
 		if err != nil {
 			return err
 		}
@@ -188,9 +213,14 @@ func createZipFromFolder(srcDir, zipPath string) error {
 		if err != nil {
 			return err
 		}
-		defer file.Close()
 
+		// Close each file before the next entry: a defer here would hold one
+		// handle per file for the whole walk and exhaust the limit on big packs.
 		_, err = io.Copy(f, file)
-		return err
+		closeErr := file.Close()
+		if err != nil {
+			return err
+		}
+		return closeErr
 	})
 }
