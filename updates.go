@@ -4,17 +4,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -23,7 +28,12 @@ import (
 var currentVersion = "3.1.1"
 
 const (
-	githubReleasesURL = "https://api.github.com/repos/KyarottoOwO/mew/releases/latest"
+	// githubRepo is the canonical repository. Builds already installed still ask
+	// the old KyarottoOwO name, which GitHub redirects here, so both keep working.
+	githubRepo        = "MewishMC/mew"
+	githubRepoAPI     = "https://api.github.com/repos/" + githubRepo
+	githubRepoWeb     = "https://github.com/" + githubRepo
+	githubReleasesURL = githubRepoAPI + "/releases/latest"
 	// updateAssetName is the build inside the release, updaterName is the
 	// helper that swaps it in for the running one.
 	updateAssetName = "mew.exe"
@@ -159,10 +169,11 @@ type UpdateInfo struct {
 }
 
 type ChangelogEntry struct {
-	Tag  string `json:"tag"`
-	URL  string `json:"url"`
-	Date string `json:"date"`
-	Body string `json:"body"`
+	Tag     string   `json:"tag"`
+	URL     string   `json:"url"`
+	Date    string   `json:"date"`
+	Body    string   `json:"body"`
+	Commits []string `json:"commits"`
 }
 
 func (a *App) GetVersion() string {
@@ -306,14 +317,63 @@ func (a *App) StartUpdate() error {
 	return nil
 }
 
-func (a *App) GetChangelog() []ChangelogEntry {
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/KyarottoOwO/mew/releases", nil)
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
+// changelogFeedURL is MEW's release feed. It carries the same thing the REST
+// API lists (each tag with its date and the changes in it) but GitHub serves
+// feeds without the anonymous rate limit, which the API burns through after a
+// handful of page visits and then answers 403, leaving the page empty.
+// tagCommits reads the matching per-tag commit feed.
+const changelogFeedURL = githubRepoWeb + "/releases.atom"
 
-	resp, err := updateClient.Do(req)
+type atomEntry struct {
+	Title   string `xml:"title"`
+	Updated string `xml:"updated"`
+	Link    struct {
+		Href string `xml:"href,attr"`
+	} `xml:"link"`
+	Content string `xml:"content"`
+}
+
+var (
+	atomListItem = regexp.MustCompile(`(?s)<li[^>]*>(.*?)</li>`)
+	htmlMarkup   = regexp.MustCompile(`(?s)<[^>]*>`)
+	spaceRun     = regexp.MustCompile(`\s+`)
+)
+
+// releaseTag reads the tag out of a release link (.../releases/tag/v3.1.0),
+// falling back to the release title ("MEW v3.1.0").
+func releaseTag(e atomEntry) string {
+	if u, err := url.Parse(e.Link.Href); err == nil {
+		tag := strings.TrimSpace(path.Base(strings.TrimSuffix(u.Path, "/")))
+		if tag != "" && tag != "." && tag != "/" {
+			return strings.TrimPrefix(tag, "v")
+		}
+	}
+	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(e.Title), "MEW"))
+	return strings.TrimPrefix(title, "v")
+}
+
+// releaseChanges pulls the list GitHub writes for a release ("What's Changed")
+// out of its HTML body, one readable line per entry.
+func releaseChanges(content string) []string {
+	changes := make([]string, 0, 8)
+	for _, match := range atomListItem.FindAllStringSubmatch(content, -1) {
+		text := htmlMarkup.ReplaceAllString(match[1], "")
+		text = strings.TrimSpace(spaceRun.ReplaceAllString(html.UnescapeString(text), " "))
+		// "New Contributors" repeats names rather than listing changes.
+		if text == "" || strings.Contains(text, "made their first contribution") {
+			continue
+		}
+		changes = append(changes, text)
+	}
+	return changes
+}
+
+// tagCommits lists the commits a release brought in: the commits on that tag
+// that are newer than the previous release. It reads the commit feed, which, as
+// with the release feed, GitHub serves without an API quota.
+func tagCommits(tag string, since time.Time) []string {
+	feedURL := fmt.Sprintf("%s/commits/%s.atom", githubRepoWeb, url.PathEscape(tag))
+	resp, err := updateClient.Get(feedURL)
 	if err != nil {
 		return nil
 	}
@@ -322,34 +382,122 @@ func (a *App) GetChangelog() []ChangelogEntry {
 		return nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	var feed struct {
+		Entries []atomEntry `xml:"entry"`
+	}
+	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
+		return nil
+	}
+
+	titles := make([]string, 0, len(feed.Entries))
+	for _, e := range feed.Entries {
+		when, err := time.Parse(time.RFC3339, strings.TrimSpace(e.Updated))
+		if err != nil || (!since.IsZero() && !when.After(since)) {
+			continue
+		}
+		title := strings.TrimSpace(spaceRun.ReplaceAllString(html.UnescapeString(e.Title), " "))
+		if title == "" || strings.HasPrefix(title, "Merge ") {
+			continue
+		}
+		titles = append(titles, title)
+	}
+	return titles
+}
+
+// changelogCache keeps the last changelog for a few minutes, so flipping back
+// to the page does not hit GitHub every time.
+var changelogCache struct {
+	mu      sync.Mutex
+	fetched time.Time
+	entries []ChangelogEntry
+}
+
+const changelogTTL = 10 * time.Minute
+
+func fetchChangelog() []ChangelogEntry {
+	resp, err := updateClient.Get(changelogFeedURL)
 	if err != nil {
 		return nil
 	}
-
-	var releases []struct {
-		TagName   string `json:"tag_name"`
-		HTMLURL   string `json:"html_url"`
-		Published string `json:"published_at"`
-		Body      string `json:"body"`
-	}
-	if err := json.Unmarshal(body, &releases); err != nil {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
 
-	var entries []ChangelogEntry
-	for _, r := range releases {
-		date := ""
-		if t, err := time.Parse(time.RFC3339, r.Published); err == nil {
-			date = t.Format("Jan 02, 2006")
+	var feed struct {
+		Entries []atomEntry `xml:"entry"`
+	}
+	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
+		return nil
+	}
+
+	type release struct {
+		tag     string
+		url     string
+		date    string
+		updated time.Time
+		changes []string
+	}
+
+	releases := make([]release, 0, len(feed.Entries))
+	for _, e := range feed.Entries {
+		rel := release{tag: releaseTag(e), url: e.Link.Href, changes: releaseChanges(e.Content)}
+		if t, err := time.Parse(time.RFC3339, strings.TrimSpace(e.Updated)); err == nil {
+			rel.updated = t
+			rel.date = t.Format("Jan 02, 2006")
 		}
+		releases = append(releases, rel)
+	}
+
+	// A tag with no release notes lists its commits instead, which is what most
+	// of these tags have: the release body is only filled in by hand or by the
+	// actions workflow.
+	var wg sync.WaitGroup
+	for i := range releases {
+		if len(releases[i].changes) > 0 {
+			continue
+		}
+		since := time.Time{}
+		if i+1 < len(releases) {
+			since = releases[i+1].updated
+		}
+		wg.Add(1)
+		go func(rel *release, since time.Time) {
+			defer wg.Done()
+			rel.changes = tagCommits("v"+rel.tag, since)
+		}(&releases[i], since)
+	}
+	wg.Wait()
+
+	entries := make([]ChangelogEntry, 0, len(releases))
+	for _, rel := range releases {
 		entries = append(entries, ChangelogEntry{
-			Tag:  strings.TrimPrefix(r.TagName, "v"),
-			URL:  r.HTMLURL,
-			Date: date,
-			Body: r.Body,
+			Tag:     rel.tag,
+			URL:     rel.url,
+			Date:    rel.date,
+			Commits: rel.changes,
 		})
 	}
+	return entries
+}
+
+func (a *App) GetChangelog() []ChangelogEntry {
+	changelogCache.mu.Lock()
+	if !changelogCache.fetched.IsZero() && time.Since(changelogCache.fetched) < changelogTTL {
+		entries := changelogCache.entries
+		changelogCache.mu.Unlock()
+		return entries
+	}
+	changelogCache.mu.Unlock()
+
+	entries := fetchChangelog()
+
+	changelogCache.mu.Lock()
+	if entries != nil {
+		changelogCache.fetched = time.Now()
+		changelogCache.entries = entries
+	}
+	changelogCache.mu.Unlock()
 	return entries
 }
 
