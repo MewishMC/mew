@@ -35,6 +35,11 @@ export const neutralColours = ref(
 export const sidebarSide = ref(saved.side === 'right' ? 'right' : 'left')
 export const glassPanels = ref(saved.glass === true)
 export const backdropImage = ref(typeof saved.backdrop === 'string' ? saved.backdrop : '')
+export const backdropBlur = ref(
+  typeof saved.blur === 'number' && saved.blur >= 0 && saved.blur <= 24
+    ? Math.round(saved.blur)
+    : 0
+)
 export const interfaceFont = ref(typeof saved.font === 'string' ? saved.font : '')
 export const uploadedFont = ref(typeof saved.fontData === 'string' ? saved.fontData : '')
 export const customCss = ref(typeof saved.css === 'string' ? saved.css : '')
@@ -54,6 +59,7 @@ export function appearanceSnapshot() {
     side: sidebarSide.value,
     glass: glassPanels.value,
     backdrop: backdropImage.value,
+    blur: backdropBlur.value,
     font: interfaceFont.value,
     fontData: uploadedFont.value,
     css: customCss.value,
@@ -111,6 +117,10 @@ export function applyAppearance() {
     '--app-backdrop',
     backdropImage.value ? `url("${backdropImage.value}")` : 'none'
   )
+  root.style.setProperty(
+    '--backdrop-blur',
+    `${backdropImage.value ? backdropBlur.value : 0}px`
+  )
 
   const stack = fontStack()
   root.style.setProperty('--font-body', stack)
@@ -132,6 +142,7 @@ watch(
     sidebarSide,
     glassPanels,
     backdropImage,
+    backdropBlur,
     interfaceFont,
     uploadedFont,
     customCss,

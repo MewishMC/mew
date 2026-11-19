@@ -2515,7 +2515,6 @@ watch(() => props.openPackReq, (req) => {
   height: 100%;
   padding: 1.25rem 1rem;
   overflow: hidden;
-  background: var(--bg-body);
 }
 
 /* Same panel every other page uses. */

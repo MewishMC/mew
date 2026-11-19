@@ -31,6 +31,9 @@
 
             if (typeof appearance.backdrop === 'string' && appearance.backdrop) {
                 root.style.setProperty('--app-backdrop', 'url("' + appearance.backdrop + '")');
+                if (typeof appearance.blur === 'number' && appearance.blur > 0) {
+                    root.style.setProperty('--backdrop-blur', appearance.blur + 'px');
+                }
             }
 
             if (typeof appearance.font === 'string' && appearance.font) {

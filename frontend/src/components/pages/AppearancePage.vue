@@ -8,6 +8,7 @@ import {
   sidebarSide,
   glassPanels,
   backdropImage,
+  backdropBlur,
   interfaceFont,
   uploadedFont,
   customCss,
@@ -198,11 +199,6 @@ function onAppearanceFile(event) {
 <template>
   <div class="page active-page appearance-page">
     <div class="ap-wrap">
-      <header class="ap-head">
-        <h2><i class="fa fa-palette"></i> Appearance</h2>
-        <p>Sidebar side, colour, font and backdrop &mdash; how MEW looks to you</p>
-      </header>
-
       <section class="ap-card">
         <h3 class="ap-card-title">Layout</h3>
         <div class="ap-row">
@@ -314,8 +310,30 @@ function onAppearanceFile(event) {
           <div
             v-if="backdropImage"
             class="bg-preview"
-            :style="{ backgroundImage: `url(${backdropImage})` }"
+            :style="{
+              backgroundImage: `url(${backdropImage})`,
+              filter: backdropBlur ? `blur(${backdropBlur}px)` : 'none',
+            }"
           ></div>
+        </div>
+
+        <div v-if="backdropImage" class="ap-row ap-row-col">
+          <div class="ap-info">
+            <span class="ap-label">Background blur</span>
+            <span class="ap-desc">Soften the image so windows and text stay readable over it</span>
+          </div>
+          <div class="hue-row">
+            <input
+              v-model.number="backdropBlur"
+              class="hue-range blur-range"
+              type="range"
+              min="0"
+              max="24"
+              step="1"
+              aria-label="Background blur"
+            />
+            <span class="hue-value">{{ backdropBlur }}px</span>
+          </div>
         </div>
 
         <div class="ap-row">
@@ -399,30 +417,9 @@ function onAppearanceFile(event) {
 
 .ap-wrap {
   width: 100%;
-  max-width: 560px;
+  max-width: 840px;
   margin: 0 auto;
   padding: 1.5rem 1rem 2rem;
-}
-
-.ap-head {
-  margin-bottom: 1.4rem;
-  text-align: center;
-}
-
-.ap-head h2 {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.ap-head p {
-  margin-top: 0.2rem;
-  font-size: 0.75rem;
-  color: var(--text-dim);
 }
 
 .ap-card {
@@ -547,6 +544,11 @@ function onAppearanceFile(event) {
   background: var(--accent);
   border: 2px solid #fff;
   box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+/* Same slider, but a soft grey-to-accent track instead of the hue spectrum. */
+.blur-range {
+  background: linear-gradient(to right, var(--bg-hover-5), var(--accent));
 }
 
 .hue-value {
