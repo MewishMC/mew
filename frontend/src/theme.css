@@ -1,5 +1,83 @@
 :root {
+  /* Customisation: the accent hue (336 = MEW's rose) and the tint
+     (0 drops the accent to grey). Set by the Appearance settings. */
+  --hue: 336;
+  --tint: 1;
+
+  /* The app's original light theme, applied to the PokeCenter layout. */
+  --bg-body: hsl(0, 0%, 97%);
+  --bg-grid: hsl(0, 0%, 90%);
+  --bg-sidebar: hsl(0, 0%, 95%);
+  --bg-surface: #ffffff;
+  --bg-input: hsl(0, 0%, 96%);
+  --bg-hover-1: hsl(0, 0%, 93%);
+  --bg-hover-2: hsl(0, 0%, 91%);
+  --bg-hover-3: hsl(0, 0%, 89%);
+  --bg-hover-4: hsl(0, 0%, 87%);
+  --bg-hover-5: hsl(0, 0%, 85%);
+  --bg-hover-6: hsl(0, 0%, 83%);
+  --bg-checker-a: hsl(0, 0%, 90%);
+  --bg-checker-b: hsl(0, 0%, 93%);
+  --border-subtle: hsl(0, 0%, 92%);
+  --border-default: hsl(0, 0%, 90%);
+  --border-light: hsl(0, 0%, 88%);
+  --border-medium: hsl(0, 0%, 85%);
+  --border-strong: hsl(0, 0%, 80%);
+  --border-focus: hsl(var(--hue), calc(60% * var(--tint)), 55%);
+  --text-primary: hsl(0, 0%, 10%);
+  --text-secondary: hsl(0, 0%, 35%);
+  --text-muted: hsl(0, 0%, 45%);
+  --text-muted2: hsl(0, 0%, 50%);
+  --text-desc: hsl(0, 0%, 52%);
+  --text-dim: hsl(0, 0%, 58%);
+  --text-faint: hsl(0, 0%, 65%);
+  --text-version: hsl(var(--hue), calc(40% * var(--tint)), 55%);
+  --accent: hsl(var(--hue), calc(57% * var(--tint)), 60%);
+  --accent-dark: hsl(var(--hue), calc(55% * var(--tint)), 38%);
+  --accent-soft: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.12);
+  --accent-glow: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.12);
+  --accent-glow2: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.18);
+  --accent-active-bg: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.12);
+  --accent-border: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.5);
+  --accent-border2: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.4);
+  --accent-light: hsl(var(--hue), calc(60% * var(--tint)), 50%);
+  --badge-bg: hsl(var(--hue), calc(60% * var(--tint)), 55%);
+  --swal-bg: #ffffff;
+  --swal-border: hsl(0, 0%, 85%);
+  --scrollbar-track: hsl(0, 0%, 93%);
+  --scrollbar-thumb: hsl(0, 0%, 80%);
+  --scrollbar-thumb-hover: hsl(0, 0%, 70%);
+  --preview-checker-a: hsl(0, 0%, 88%);
+  --preview-checker-b: hsl(0, 0%, 91%);
+
+  /* Secondary buttons and panel trims, in the same neutral ramp */
+  --beige: hsl(0, 0%, 93%);
+  --beige-dark: hsl(0, 0%, 78%);
+  --beige-text: hsl(0, 0%, 25%);
+  --panel-ring: hsl(0, 0%, 90%);
+  --panel-shadow: 0 3px 0 rgba(0, 0, 0, 0.05), 0 6px 14px rgba(0, 0, 0, 0.07);
+  /* Glass panels (Appearance > Backdrop) */
+  --glass-bg: rgba(255, 255, 255, 0.74);
+  --glass-blur: 14px;
+
+  --font-pixel: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Fern-style "neutral colours": no tint, so the accent turns grey. */
+:root[data-neutral="1"] {
+  --tint: 0;
+}
+
+/* The Poke Ball sprite is drawn in rose; turn it with the accent. */
+:root {
+  --ball-hue: calc((var(--hue) - 336) * 1deg);
+}
+
+:root[data-theme="dark"] {
+  /* The app's original dark theme, applied to the PokeCenter layout. */
   --bg-body: hsl(0, 0%, 2%);
+  --bg-grid: hsl(0, 0%, 8%);
   --bg-sidebar: hsl(0, 0%, 3%);
   --bg-surface: hsl(0, 0%, 4%);
   --bg-input: hsl(0, 0%, 5%);
@@ -16,23 +94,25 @@
   --border-light: hsl(0, 0%, 12%);
   --border-medium: hsl(0, 0%, 15%);
   --border-strong: hsl(0, 0%, 20%);
-  --border-focus: hsl(0, 0%, 25%);
-  --text-primary: white;
+  --border-focus: hsl(var(--hue), calc(60% * var(--tint)), 55%);
+  --text-primary: #ffffff;
   --text-secondary: hsl(0, 0%, 80%);
   --text-muted: hsl(0, 0%, 60%);
   --text-muted2: hsl(0, 0%, 55%);
   --text-desc: hsl(0, 0%, 50%);
   --text-dim: hsl(0, 0%, 40%);
   --text-faint: hsl(0, 0%, 30%);
-  --text-version: hsl(330, 50%, 65%);
-  --accent: #e879a8;
-  --accent-glow: hsla(330, 60%, 65%, 0.1);
-  --accent-glow2: hsla(330, 60%, 65%, 0.15);
-  --accent-active-bg: hsla(330, 60%, 25%);
-  --accent-border: hsl(330, 60%, 40%);
-  --accent-border2: hsl(330, 60%, 35%);
-  --accent-light: hsl(330, 60%, 70%);
-  --badge-bg: hsl(330, 60%, 40%);
+  --text-version: hsl(var(--hue), calc(50% * var(--tint)), 65%);
+  --accent: hsl(var(--hue), calc(71% * var(--tint)), 69%);
+  --accent-dark: hsl(var(--hue), calc(60% * var(--tint)), 35%);
+  --accent-soft: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.15);
+  --accent-glow: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.1);
+  --accent-glow2: hsla(var(--hue), calc(60% * var(--tint)), 65%, 0.15);
+  --accent-active-bg: hsla(var(--hue), calc(60% * var(--tint)), 25%, 1);
+  --accent-border: hsl(var(--hue), calc(60% * var(--tint)), 40%);
+  --accent-border2: hsl(var(--hue), calc(60% * var(--tint)), 35%);
+  --accent-light: hsl(var(--hue), calc(60% * var(--tint)), 70%);
+  --badge-bg: hsl(var(--hue), calc(60% * var(--tint)), 40%);
   --swal-bg: hsl(0, 0%, 5%);
   --swal-border: hsl(0, 0%, 15%);
   --scrollbar-track: hsl(0, 0%, 5%);
@@ -40,48 +120,13 @@
   --scrollbar-thumb-hover: hsl(0, 0%, 30%);
   --preview-checker-a: hsl(0, 0%, 15%);
   --preview-checker-b: hsl(0, 0%, 10%);
-}
 
-:root[data-theme="light"] {
-  --bg-body: hsl(0, 0%, 97%);
-  --bg-sidebar: hsl(0, 0%, 95%);
-  --bg-surface: white;
-  --bg-input: hsl(0, 0%, 96%);
-  --bg-hover-1: hsl(0, 0%, 93%);
-  --bg-hover-2: hsl(0, 0%, 91%);
-  --bg-hover-3: hsl(0, 0%, 89%);
-  --bg-hover-4: hsl(0, 0%, 87%);
-  --bg-hover-5: hsl(0, 0%, 85%);
-  --bg-hover-6: hsl(0, 0%, 83%);
-  --bg-checker-a: hsl(0, 0%, 90%);
-  --bg-checker-b: hsl(0, 0%, 93%);
-  --border-subtle: hsl(0, 0%, 92%);
-  --border-default: hsl(0, 0%, 90%);
-  --border-light: hsl(0, 0%, 88%);
-  --border-medium: hsl(0, 0%, 85%);
-  --border-strong: hsl(0, 0%, 80%);
-  --border-focus: hsl(0, 0%, 75%);
-  --text-primary: hsl(0, 0%, 10%);
-  --text-secondary: hsl(0, 0%, 35%);
-  --text-muted: hsl(0, 0%, 45%);
-  --text-muted2: hsl(0, 0%, 50%);
-  --text-desc: hsl(0, 0%, 52%);
-  --text-dim: hsl(0, 0%, 58%);
-  --text-faint: hsl(0, 0%, 65%);
-  --text-version: hsl(330, 40%, 55%);
-  --accent: #d4608e;
-  --accent-glow: hsla(330, 60%, 65%, 0.12);
-  --accent-glow2: hsla(330, 60%, 65%, 0.18);
-  --accent-active-bg: hsla(330, 60%, 65%, 0.12);
-  --accent-border: hsla(330, 60%, 65%, 0.5);
-  --accent-border2: hsla(330, 60%, 65%, 0.4);
-  --accent-light: hsl(330, 60%, 50%);
-  --badge-bg: hsl(330, 60%, 55%);
-  --swal-bg: white;
-  --swal-border: hsl(0, 0%, 85%);
-  --scrollbar-track: hsl(0, 0%, 93%);
-  --scrollbar-thumb: hsl(0, 0%, 80%);
-  --scrollbar-thumb-hover: hsl(0, 0%, 70%);
-  --preview-checker-a: hsl(0, 0%, 88%);
-  --preview-checker-b: hsl(0, 0%, 91%);
+  --beige: hsl(0, 0%, 10%);
+  --beige-dark: hsl(0, 0%, 7%);
+  --beige-text: hsl(0, 0%, 80%);
+  --panel-ring: hsl(0, 0%, 12%);
+  --panel-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
+  /* Glass panels (Appearance > Backdrop) */
+  --glass-bg: rgba(12, 12, 14, 0.66);
+  --glass-blur: 14px;
 }

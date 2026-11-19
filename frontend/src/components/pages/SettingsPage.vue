@@ -101,10 +101,6 @@ async function persistSettings() {
   }
 }
 
-function onThemeChange() {
-  persistSettings()
-}
-
 watch([portAllSkies, skyPresets], ([all, presets]) => {
   if (all && presets) {
     if (portAllSkies.value) {
@@ -202,17 +198,6 @@ onMounted(loadSettings)
       <h2 class="card-title"><i class="fa fa-gear"></i> Settings</h2>
 
       <div class="setting-group">
-        <div class="setting-row setting-row-block">
-          <div class="setting-info">
-            <span class="setting-label">Theme</span>
-            <span class="setting-desc">Choose between dark and light appearance</span>
-          </div>
-          <select v-model="theme" class="select-input" @change="onThemeChange">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </div>
-
         <div class="setting-row">
           <div class="setting-info">
             <span class="setting-label">Auto-Import to Bedrock</span>

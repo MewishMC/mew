@@ -5,7 +5,8 @@ html, body {
   padding: 0;
   background-color: var(--bg-body);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
+  font-size: 15px;
   overflow: hidden;
   height: 100vh;
 }
@@ -15,44 +16,395 @@ html, body {
   width: 100vw;
 }
 
+/* ---------------------------------------------------------------------------
+   PokeCenter skin
+   White panels with a pale ring, red title strips, beige bevelled buttons and
+   pixel type on chrome only.
+--------------------------------------------------------------------------- */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+img {
+  image-rendering: pixelated;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Panels ------------------------------------------------------------------- */
+.home-card,
+.about-box,
+.recent-box,
+.porter-card,
+.contact-card,
+.settings-card,
+.tool-card,
+.pv-card,
+.pv-item-card,
+.skyconv-card,
+.jui-panel,
+.ai-pack-card,
+.changelog-section,
+.installed-section,
+.progress-notification,
+.ap-card,
+.rp-entry,
+.mt-shell,
+.pv-shell,
+.mt-list,
+.mt-editor,
+.pv-modal {
+  background: var(--bg-surface) !important;
+  border: 2px solid var(--bg-surface) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 2px var(--panel-ring), var(--panel-shadow) !important;
+}
+
+/* Panel title strips: every card opens with the same pink bar as the Home
+   cards, so the single-card tools, Settings and Appearance read alike. */
+.card-title,
+.ap-card-title {
+  background: var(--accent) !important;
+  border-bottom: 2px solid var(--accent-dark) !important;
+  border-radius: 4px 4px 0 0 !important;
+  color: #fff !important;
+  font-family: var(--font-pixel) !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  line-height: 1.5 !important;
+  text-transform: uppercase !important;
+  padding: 0.55rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.card-title {
+  margin: -1.5rem -1.5rem 1rem !important;
+}
+
+/* Long single-card pages need room above and below the card. */
+.settings-page,
+.packporter-page,
+.folderporter-page,
+.recolor-page,
+.animator-page,
+.skyconv-page {
+  padding: 1.25rem 1rem !important;
+}
+
+.ap-card-title {
+  margin: 0 -1.1rem !important;
+  padding: 0.55rem 1.1rem !important;
+}
+
+/* Buttons ------------------------------------------------------------------ */
+button {
+  border-radius: 4px !important;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.btn-cancel,
+.btn-sm,
+.btn-contact,
+.mt-btn,
+.mt-icon-btn,
+.jui-btn,
+.re-btn,
+.re-tool-btn,
+.pv-mat-btn,
+.pv-sort-btn,
+.pv-sky-debug-btn,
+.pv-modal-skybtn,
+.pv-modal-menubtn,
+.update-btn,
+.info-link-btn,
+.custom-cancel-btn,
+.pn-cancel,
+.toggle-btn,
+.ap-btn,
+.seg button,
+.mode-tab {
+  background: var(--beige) !important;
+  color: var(--beige-text) !important;
+  border: 2px solid var(--beige-dark) !important;
+  box-shadow: inset 0 -3px 0 var(--beige-dark) !important;
+  font-family: var(--font-pixel) !important;
+  font-size: 0.85rem !important;
+  padding: 0.32rem 0.8rem;
+  cursor: pointer;
+}
+
+.btn-cancel:hover,
+.btn-sm:hover,
+.btn-contact:hover,
+.mt-btn:hover,
+.jui-btn:hover,
+.re-btn:hover,
+.re-tool-btn:hover,
+.pv-mat-btn:hover,
+.pv-sort-btn:hover,
+.update-btn:hover,
+.info-link-btn:hover,
+.custom-cancel-btn:hover,
+.pn-cancel:hover,
+.toggle-btn:hover,
+.ap-btn:hover,
+.seg button:hover,
+.mode-tab:hover {
+  filter: brightness(1.04);
+}
+
+.btn-cancel:active,
+.btn-sm:active,
+.btn-contact:active,
+.mt-btn:active,
+.jui-btn:active,
+.re-btn:active,
+.re-tool-btn:active,
+.pv-mat-btn:active,
+.pv-sort-btn:active,
+.update-btn:active,
+.info-link-btn:active,
+.custom-cancel-btn:active,
+.pn-cancel:active,
+.toggle-btn:active,
+.ap-btn:active,
+.seg button:active,
+.mode-tab:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 var(--beige-dark) !important;
+}
+
+.btn-main,
+.mt-btn-primary,
+.jui-btn-primary,
+.custom-confirm-btn,
+.info-update-btn {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: 2px solid var(--accent-dark) !important;
+  box-shadow: inset 0 -3px 0 var(--accent-dark) !important;
+  font-family: var(--font-pixel) !important;
+  font-size: 0.85rem !important;
+  padding: 0.32rem 0.8rem;
+  cursor: pointer;
+}
+
+.btn-main:hover,
+.mt-btn-primary:hover,
+.jui-btn-primary:hover,
+.custom-confirm-btn:hover,
+.info-update-btn:hover {
+  filter: brightness(1.06);
+}
+
+.btn-main:active,
+.mt-btn-primary:active,
+.jui-btn-primary:active,
+.custom-confirm-btn:active,
+.info-update-btn:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 var(--accent-dark) !important;
+}
+
+.btn-main:disabled,
+.mt-btn-primary:disabled,
+.jui-btn-primary:disabled,
+.btn-main:disabled:hover,
+.mt-btn-primary:disabled:hover,
+.jui-btn-primary:disabled:hover {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* Selected/active states go red so they stay readable on beige rows */
+.pv-mat-btn.active,
+.pv-sort-btn.active,
+.re-tool-btn.active,
+.mt-btn-toggle-on,
+.pv-modal-skybtn.active,
+.pv-modal-menubtn.active,
+.seg button.on,
+.mode-tab.active {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-color: var(--accent-dark) !important;
+  box-shadow: inset 0 -3px 0 var(--accent-dark) !important;
+}
+
+/* Segmented switches keep short labels on one line, like the tool tabs. */
+.mode-tab,
+.seg button {
+  font-size: 0.75rem !important;
+  padding: 0.32rem 0.6rem !important;
+  white-space: nowrap;
+}
+
+/* Inputs ------------------------------------------------------------------- */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+input[type="password"],
+input[type="email"],
+input[type="url"],
+input[type="tel"],
+textarea,
+select {
+  background: var(--bg-input) !important;
+  border: 2px solid var(--border-default) !important;
+  border-radius: 4px !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.05) !important;
+  padding: 6px 9px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+input[type="tel"]:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent) !important;
+  outline: none;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* Toggle switches (Settings, Appearance) hide the native box. */
+.toggle input[type="checkbox"] {
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  position: absolute;
+}
+
+/* Progress ----------------------------------------------------------------- */
+.progress-track,
+.pn-track {
+  background: var(--bg-hover-2) !important;
+  border: 2px solid var(--border-default) !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+}
+
+/* SweetAlert --------------------------------------------------------------- */
 .swal-custom-popup {
   background: var(--swal-bg) !important;
-  border: 1px solid var(--swal-border) !important;
+  border: 2px solid var(--bg-surface) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 2px var(--panel-ring), var(--panel-shadow) !important;
   color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+}
+
+.swal2-title {
+  font-family: var(--font-pixel) !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  color: var(--accent) !important;
+}
+
+.swal2-html-container {
+  font-family: var(--font-body) !important;
+  font-size: 0.95rem !important;
+  color: var(--text-secondary) !important;
 }
 
 .custom-confirm-btn {
-  background: transparent !important;
-  color: var(--accent) !important;
-  border: 1px solid var(--accent) !important;
-  border-radius: 4px !important;
-  padding: 0.5rem 1.5rem !important;
-  cursor: pointer !important;
-}
-
-.custom-confirm-btn:hover {
-  background: var(--accent-glow) !important;
+  padding: 0.45rem 1.4rem !important;
 }
 
 .custom-cancel-btn {
-  background: var(--bg-hover-2) !important;
-  color: var(--text-muted) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 4px !important;
-  padding: 0.5rem 1.5rem !important;
-  cursor: pointer !important;
-}
-
-.custom-cancel-btn:hover {
-  background: var(--bg-hover-5) !important;
+  padding: 0.45rem 1.4rem !important;
 }
 
 .swal2-actions {
   gap: 0.75rem;
 }
 
+/* Appearance: backdrop image, glass panels and sidebar side ---------------- */
+body {
+  background-image: var(--app-backdrop, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Glass: the panels let the backdrop through and blur it. */
+:root[data-glass="1"] .sidebar,
+:root[data-glass="1"] .home-card,
+:root[data-glass="1"] .about-box,
+:root[data-glass="1"] .recent-box,
+:root[data-glass="1"] .porter-card,
+:root[data-glass="1"] .contact-card,
+:root[data-glass="1"] .settings-card,
+:root[data-glass="1"] .ap-card,
+:root[data-glass="1"] .tool-card,
+:root[data-glass="1"] .pv-card,
+:root[data-glass="1"] .pv-item-card,
+:root[data-glass="1"] .skyconv-card,
+:root[data-glass="1"] .jui-panel,
+:root[data-glass="1"] .ai-pack-card,
+:root[data-glass="1"] .changelog-section,
+:root[data-glass="1"] .installed-section,
+:root[data-glass="1"] .progress-notification,
+:root[data-glass="1"] .rp-entry,
+:root[data-glass="1"] .mt-shell,
+:root[data-glass="1"] .pv-shell,
+:root[data-glass="1"] .mt-list,
+:root[data-glass="1"] .mt-editor,
+:root[data-glass="1"] .pv-modal {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+}
+
+/* Layout: move the sidebar to the right edge. */
+:root[data-side="right"] .app-main {
+  flex-direction: row-reverse;
+}
+
+:root[data-side="right"] .sidebar {
+  margin: 10px 10px 10px 0 !important;
+}
+
+/* Scrollbars --------------------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -61,9 +413,13 @@ html, body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 3px;
+  border: 2px solid var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import HomePage from './components/pages/HomePage.vue'
 import PackPorter from './components/tools/PackPorter.vue'
@@ -8,6 +8,7 @@ import RecolorTool from './components/tools/RecolorTool.vue'
 import AnimatedInventory from './components/tools/AnimatedInventory.vue'
 import RecolorEditor from './components/tools/RecolorEditor.vue'
 import InfoPage from './components/pages/InfoPage.vue'
+import AppearancePage from './components/pages/AppearancePage.vue'
 import SettingsPage from './components/pages/SettingsPage.vue'
 import ContactPage from './components/pages/ContactPage.vue'
 import RecentPacksPage from './components/pages/RecentPacksPage.vue'
@@ -16,17 +17,67 @@ import PackViewer from './components/tools/PackViewer.vue'
 import ManifestTool from './components/tools/ManifestTool.vue'
 import ProgressNotification from './components/shared/ProgressNotification.vue'
 import { GetSettings, SaveSettings, CheckForUpdate, OpenDownloadLink, SetDiscordActivity } from '../wailsjs/go/main/App'
+import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit } from '../wailsjs/runtime/runtime'
 import { updaterState, startUpdate } from './utils/updater'
+import { applyTheme } from './utils/appearance'
 
 const currentPage = ref('home')
+
+const pageTitles = {
+  home: 'Home',
+  packporter: 'Pack Porter',
+  packFolderPorter: 'Multi-Pack Porter',
+  recolor: 'Pack Editor',
+  recoloreditor: 'Pack Editor',
+  animator: 'Animated Inventory',
+  skyconverter: 'Sky Converter',
+  packviewer: 'Pack Viewer',
+  manifest: 'Manifest',
+  recentpacks: 'Recent Packs',
+  info: 'Info',
+  appearance: 'Appearance',
+  settings: 'Settings',
+  contact: 'Contact',
+}
+
+const pageTitle = computed(() => pageTitles[currentPage.value] || 'Home')
 const recolorSource = ref(null)
 const packViewRequest = ref(null)
-const sidebarWidth = ref(64)
+const sidebarWidth = ref(232)
 
 const homeAnimated = ref(localStorage.getItem('mew_home_animated') === '1')
 const updateAvailable = ref(false)
 const latestVersion = ref('')
 const updateDismissed = ref(false)
+const isMaximised = ref(false)
+
+// Wails injects window.runtime; absent in the browser preview, so guard it.
+function hasRuntime() {
+  return typeof window !== 'undefined' && !!window.runtime
+}
+
+async function syncMaximised() {
+  if (!hasRuntime()) return
+  try {
+    isMaximised.value = await WindowIsMaximised()
+  } catch (e) {
+    // keep last known state
+  }
+}
+
+function minimiseWindow() {
+  if (hasRuntime()) WindowMinimise()
+}
+
+function toggleMaximise() {
+  if (!hasRuntime()) return
+  WindowToggleMaximise()
+  setTimeout(syncMaximised, 120)
+}
+
+function closeWindow() {
+  if (hasRuntime()) Quit()
+}
 
 function onHomeAnimated() {
   homeAnimated.value = true
@@ -67,8 +118,7 @@ async function syncSettingsToBackend() {
   try {
     const s = await GetSettings()
     await SaveSettings(s)
-    const theme = s.theme || 'dark'
-    document.documentElement.dataset.theme = theme
+    applyTheme(s.theme || 'dark')
   } catch (e) {
     console.error('Failed to sync settings:', e)
   }
@@ -87,6 +137,7 @@ async function checkForUpdates() {
 }
 
 onMounted(() => {
+  syncMaximised()
   syncSettingsToBackend()
   checkForUpdates()
   SetDiscordActivity('Browsing MEW', 'Minecraft Bedrock Texture Pack Manager')
@@ -104,6 +155,23 @@ function blockCtrlZoom(e) {
 
 <template>
   <div class="app-layout">
+    <div class="page-bar" style="--wails-draggable: drag" @dblclick="toggleMaximise">
+      <span class="pb-ball" aria-hidden="true"></span>
+      <span class="pb-title">{{ pageTitle }}</span>
+
+      <div class="pb-controls" style="--wails-draggable: no-drag" @dblclick.stop>
+        <button class="pb-btn" title="Minimise" @click="minimiseWindow">
+          <i class="fa fa-minus"></i>
+        </button>
+        <button class="pb-btn" :title="isMaximised ? 'Restore' : 'Maximise'" @click="toggleMaximise">
+          <i class="fa" :class="isMaximised ? 'fa-clone' : 'fa-expand'"></i>
+        </button>
+        <button class="pb-btn pb-btn-close" title="Close" @click="closeWindow">
+          <i class="fa fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
     <div v-if="updateAvailable && !updateDismissed" class="update-banner">
       <i class="fa fa-download update-icon"></i>
 
@@ -140,6 +208,7 @@ function blockCtrlZoom(e) {
       <PackViewer v-show="currentPage === 'packviewer'" :active="currentPage === 'packviewer'" :open-pack-req="packViewRequest" />
       <ManifestTool v-show="currentPage === 'manifest'" :active="currentPage === 'manifest'" />
       <InfoPage v-show="currentPage === 'info'" />
+      <AppearancePage v-show="currentPage === 'appearance'" />
       <SettingsPage v-show="currentPage === 'settings'" />
       <ContactPage v-show="currentPage === 'contact'" />
     </div>
@@ -158,8 +227,93 @@ function blockCtrlZoom(e) {
 body {
   background-color: var(--bg-body);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   overflow: hidden;
+}
+
+.page-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  flex-shrink: 0;
+  padding: 0 8px 0 4px;
+  background: var(--accent);
+  border-bottom: 2px solid var(--accent-dark);
+  z-index: 25;
+}
+
+/* Poke Ball: the sprite lifted 1:1 from the reference artwork. The light
+   badge is used for the light theme, a dark badge for the dark theme. */
+.pb-ball {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: url('/pokeball.png') center / 28px 28px no-repeat;
+  image-rendering: pixelated;
+  /* Follows the accent hue picked in Settings > Appearance. */
+  filter: hue-rotate(var(--ball-hue, 0deg));
+}
+
+:root[data-theme="dark"] .pb-ball {
+  background-image: url('/pokeball-dark.png');
+}
+
+.pb-title {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 14px;
+  border-right: 2px solid var(--accent-dark);
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pb-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-dark);
+}
+
+.pb-btn {
+  width: 28px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 4px !important;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.pb-btn:hover {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: var(--accent-dark);
+}
+
+.pb-btn:active {
+  transform: translateY(1px);
+}
+
+.pb-btn-close:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
 }
 
 .app-layout {

@@ -2092,29 +2092,17 @@ watch(() => props.openPackReq, (req) => {
 
 <template>
   <div class="pv-page page">
-    <div v-if="!loading && !showServerPacks && packList.length === 0" class="pv-empty">
-      <i class="fa fa-box-open pv-empty-icon"></i>
-      <p>No installed packs found.</p>
-      <p class="pv-empty-sub">Install a pack from the Pack Porter first.</p>
-    </div>
-    <div v-else-if="!loading && showServerPacks && cachePackList.length === 0" class="pv-empty">
-      <i class="fa fa-server pv-empty-icon"></i>
-      <p>No server packs found.</p>
-      <p class="pv-empty-sub">Download a resource pack from a server to see it here.</p>
-    </div>
-
-    <template v-else>
-      <div class="pv-toolbar">
-        <div class="pv-search">
-          <i class="fa fa-magnifying-glass pv-search-icon"></i>
-          <input v-model="searchQuery" class="pv-search-input" placeholder="Search packs..." />
-          <span v-if="searchQuery" class="pv-search-clear" @click="searchQuery = ''"><i class="fa fa-xmark"></i></span>
+    <div class="pv-shell">
+      <div class="card-title pv-head">
+        <div class="pv-head-title">
+          <i class="fa fa-images"></i>
+          <span>Pack Viewer</span>
+          <span class="pv-count">{{ filteredPacks.length }} pack{{ filteredPacks.length !== 1 ? 's' : '' }}</span>
         </div>
-        <div class="pv-toolbar-right">
+        <div class="pv-head-actions">
           <button class="pv-sort-btn" :class="{ active: showServerPacks }" @click="showServerPacks = !showServerPacks; closeModal()" title="Toggle server packs from cache">
             <i class="fa fa-server"></i> Server Packs
           </button>
-          <span class="pv-count">{{ filteredPacks.length }} pack{{ filteredPacks.length !== 1 ? 's' : '' }}</span>
           <div class="pv-sort">
             <button v-for="opt in [{v:'name',icon:'fa-arrow-down-a-z'},{v:'date',icon:'fa-clock'},{v:'size',icon:'fa-hard-drive'}]"
               :key="opt.v" class="pv-sort-btn" :class="{ active: sortBy === opt.v }"
@@ -2124,28 +2112,52 @@ watch(() => props.openPackReq, (req) => {
         </div>
       </div>
 
-      <div v-if="filteredPacks.length === 0" class="pv-empty" style="height:auto;padding:3rem">
-        <i class="fa fa-magnifying-glass pv-empty-icon" style="font-size:2rem"></i>
-        <p>No packs match your search.</p>
-      </div>
-
-      <div v-else class="pv-grid">
-        <div v-for="pack in filteredPacks" :key="pack.dirName" class="pv-card" @click="openPack(pack.dirName)">
-          <div class="pv-card-art">
-            <img v-if="pack.iconURI" :src="pack.iconURI" class="pv-card-icon" width="56" height="56" loading="lazy" decoding="async" />
-            <div v-else class="pv-card-icon pv-card-placeholder">
-              <i class="fa fa-box"></i>
-            </div>
-            <img v-if="pack.skinThumb" :src="pack.skinThumb" class="pv-card-skin" width="64" height="64" title="Pack preview: skin, diamond armor and sword" alt="Pack preview" decoding="async" />
-          </div>
-          <div class="pv-card-info">
-            <span class="pv-card-name" v-html="parseBedrockCodes(pack.name || pack.dirName)"></span>
-            <span v-if="pack.description" class="pv-card-desc" v-html="parseBedrockCodes(pack.description)"></span>
-            <span class="pv-card-size">{{ formatSize(pack.size) }}</span>
-          </div>
+      <div class="pv-body">
+        <div v-if="!loading && !showServerPacks && packList.length === 0" class="pv-empty">
+          <i class="fa fa-box-open pv-empty-icon"></i>
+          <p>No installed packs found.</p>
+          <p class="pv-empty-sub">Install a pack from the Pack Porter first.</p>
         </div>
+        <div v-else-if="!loading && showServerPacks && cachePackList.length === 0" class="pv-empty">
+          <i class="fa fa-server pv-empty-icon"></i>
+          <p>No server packs found.</p>
+          <p class="pv-empty-sub">Download a resource pack from a server to see it here.</p>
+        </div>
+
+        <template v-else>
+          <div class="pv-toolbar">
+            <div class="pv-search">
+              <i class="fa fa-magnifying-glass pv-search-icon"></i>
+              <input v-model="searchQuery" class="pv-search-input" placeholder="Search packs..." />
+              <span v-if="searchQuery" class="pv-search-clear" @click="searchQuery = ''"><i class="fa fa-xmark"></i></span>
+            </div>
+          </div>
+
+          <div v-if="filteredPacks.length === 0" class="pv-empty" style="height:auto;padding:3rem">
+            <i class="fa fa-magnifying-glass pv-empty-icon" style="font-size:2rem"></i>
+            <p>No packs match your search.</p>
+          </div>
+
+          <div v-else class="pv-grid">
+            <div v-for="pack in filteredPacks" :key="pack.dirName" class="pv-card" @click="openPack(pack.dirName)">
+              <div class="pv-card-art">
+                <img v-if="pack.iconURI" :src="pack.iconURI" class="pv-card-icon" width="56" height="56" loading="lazy" decoding="async" />
+                <div v-else class="pv-card-icon pv-card-placeholder">
+                  <i class="fa fa-box"></i>
+                </div>
+                <img v-if="pack.skinThumb" :src="pack.skinThumb" class="pv-card-skin" width="64" height="64" title="Pack preview: skin, diamond armor and sword" alt="Pack preview" decoding="async" />
+              </div>
+              <div class="pv-card-info">
+                <span class="pv-card-name" v-html="parseBedrockCodes(pack.name || pack.dirName)"></span>
+                <span v-if="pack.description" class="pv-card-desc" v-html="parseBedrockCodes(pack.description)"></span>
+                <span class="pv-card-size">{{ formatSize(pack.size) }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
       </div>
-    </template>
+    </div>
 
     <div v-if="showModal" class="pv-modal-overlay" @click.self="closeModal">
       <div class="pv-modal" :class="{ 'pv-modal-wide': viewerMode === 'ui' }">
@@ -2499,9 +2511,74 @@ watch(() => props.openPackReq, (req) => {
 .pv-page {
   display: flex;
   flex-direction: column;
+  align-items: center;
   height: 100%;
-  overflow-y: auto;
+  padding: 1.25rem 1rem;
+  overflow: hidden;
   background: var(--bg-body);
+}
+
+/* Same panel every other page uses. */
+.pv-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1180px;
+  padding: 1.5rem;
+}
+
+.pv-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pv-head {
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.pv-head-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.pv-head-title .fa {
+  color: inherit;
+}
+
+.pv-head .pv-count {
+  color: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+.pv-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pv-head .pv-sort-btn {
+  padding: 0.18rem 0.6rem;
+  font-size: 0.72rem !important;
+  white-space: nowrap;
+}
+
+.pv-head .pv-sort {
+  background: transparent;
 }
 
 .pv-empty {
@@ -2520,10 +2597,10 @@ watch(() => props.openPackReq, (req) => {
 .pv-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 1rem;
-  padding: 1rem 1.5rem 0.25rem;
-  position: relative;
+  padding: 0 0 0.75rem;
+  flex-shrink: 0;
 }
 
 .pv-toolbar-right {
@@ -2645,7 +2722,7 @@ watch(() => props.openPackReq, (req) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 0.75rem;
-  padding: 1.5rem;
+  padding: 0 0 0.25rem;
 }
 
 .pv-card {

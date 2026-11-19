@@ -113,7 +113,7 @@ onMounted(async () => {
   <div class="page active-page info-page">
     <div class="info-content">
       <div class="info-hero">
-        <img src="/logo.png" alt="MEW" class="info-logo" />
+        <img src="/logo-small.png" alt="MEW" class="info-logo" />
         <h2 class="info-title">MEW</h2>
         <p class="info-tagline">Minecraft Bedrock Texture Pack Manager</p>
         <span class="info-version" v-if="currentVersion">v{{ currentVersion }}</span>
@@ -234,6 +234,7 @@ onMounted(async () => {
   width: 72px;
   height: 72px;
   border-radius: 14px;
+  image-rendering: auto;
   margin-bottom: 0.85rem;
   object-fit: contain;
   box-shadow: 0 0 0 1px var(--border-default), 0 8px 24px rgba(0, 0, 0, 0.35);

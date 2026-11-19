@@ -534,230 +534,232 @@ watch(() => props.active, (val) => {
 
 <template>
   <div class="mt-page page">
-    <div class="mt-toolbar">
-      <div class="mt-toolbar-title">
-        <i class="fa fa-file-lines"></i>
-        <span>Manifest Manager</span>
-        <span class="mt-count">{{ packs.length }} pack{{ packs.length === 1 ? '' : 's' }}</span>
+    <div class="mt-shell">
+      <div class="card-title mt-toolbar">
+        <div class="mt-toolbar-title">
+          <i class="fa fa-file-lines"></i>
+          <span>Manifest</span>
+          <span class="mt-count">{{ packs.length }} pack{{ packs.length === 1 ? '' : 's' }}</span>
+        </div>
+        <button class="mt-btn mt-btn-primary" :disabled="saving" @click="makeNew">
+          <i class="fa fa-plus"></i> Make New Manifest
+        </button>
       </div>
-      <button class="mt-btn mt-btn-primary" :disabled="saving" @click="makeNew">
-        <i class="fa fa-plus"></i> Make New Manifest
-      </button>
-    </div>
 
-    <div class="mt-body">
-      <div class="mt-list">
-        <div class="mt-source-tabs">
-          <button class="mt-source-tab" :class="{ active: sourceTab === 'installed' }" @click="sourceTab = 'installed'">
-            Installed
-          </button>
-          <button class="mt-source-tab" :class="{ active: sourceTab === 'cache' }" @click="sourceTab = 'cache'">
-            Pack Cache
-          </button>
-          <button class="mt-source-tab" :class="{ active: sourceTab === 'upload' }" @click="sourceTab = 'upload'">
-            Upload
-          </button>
-        </div>
+      <div class="mt-body">
+        <div class="mt-list">
+          <div class="mt-source-tabs">
+            <button class="mt-source-tab" :class="{ active: sourceTab === 'installed' }" @click="sourceTab = 'installed'">
+              Installed
+            </button>
+            <button class="mt-source-tab" :class="{ active: sourceTab === 'cache' }" @click="sourceTab = 'cache'">
+              Pack Cache
+            </button>
+            <button class="mt-source-tab" :class="{ active: sourceTab === 'upload' }" @click="sourceTab = 'upload'">
+              Upload
+            </button>
+          </div>
 
-        <div v-if="sourceTab !== 'upload'" class="mt-list-filter">
-          <i class="fa fa-magnifying-glass"></i>
-          <input v-model="mtQuery" class="mt-list-search" type="text" placeholder="Search packs..." />
-          <button v-if="mtQuery" class="mt-list-clear" @click="mtQuery = ''" title="Clear search">&times;</button>
-        </div>
+          <div v-if="sourceTab !== 'upload'" class="mt-list-filter">
+            <i class="fa fa-magnifying-glass"></i>
+            <input v-model="mtQuery" class="mt-list-search" type="text" placeholder="Search packs..." />
+            <button v-if="mtQuery" class="mt-list-clear" @click="mtQuery = ''" title="Clear search">&times;</button>
+          </div>
 
-        <div class="mt-list-body">
-          <template v-if="sourceTab === 'installed'">
-            <div v-if="loading" class="mt-empty">Loading packs...</div>
-            <div v-else-if="!filteredInstalled.length" class="mt-empty">
-              {{ mtQuery ? 'No packs match "' + mtQuery + '".' : 'No installed packs found.' }}
-            </div>
-            <div v-else class="mt-items">
-              <div
-                v-for="p in filteredInstalled"
-                :key="p.dirName"
-                class="mt-item"
-                :class="{ active: isSel({ kind: 'installed', name: p.dirName }) }"
-                @click="openItem({ kind: 'installed', name: p.dirName, label: p.dirName, displayName: p.name })"
-              >
-                <img v-if="p.iconURI" :src="p.iconURI" class="mt-item-icon" alt="" />
-                <div v-else class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
-                <div class="mt-item-info">
-                  <span class="mt-item-name">{{ p.name }}</span>
-                  <span v-if="p.description" class="mt-item-desc">{{ p.description }}</span>
-                  <span class="mt-item-meta">
-                    <span v-if="p.hasManifest" class="mt-badge">
-                      {{ p.moduleType || 'manifest' }}<template v-if="p.packVersion"> · {{ p.packVersion }}</template>
+          <div class="mt-list-body">
+            <template v-if="sourceTab === 'installed'">
+              <div v-if="loading" class="mt-empty">Loading packs...</div>
+              <div v-else-if="!filteredInstalled.length" class="mt-empty">
+                {{ mtQuery ? 'No packs match "' + mtQuery + '".' : 'No installed packs found.' }}
+              </div>
+              <div v-else class="mt-items">
+                <div
+                  v-for="p in filteredInstalled"
+                  :key="p.dirName"
+                  class="mt-item"
+                  :class="{ active: isSel({ kind: 'installed', name: p.dirName }) }"
+                  @click="openItem({ kind: 'installed', name: p.dirName, label: p.dirName, displayName: p.name })"
+                >
+                  <img v-if="p.iconURI" :src="p.iconURI" class="mt-item-icon" alt="" />
+                  <div v-else class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
+                  <div class="mt-item-info">
+                    <span class="mt-item-name">{{ p.name }}</span>
+                    <span v-if="p.description" class="mt-item-desc">{{ p.description }}</span>
+                    <span class="mt-item-meta">
+                      <span v-if="p.hasManifest" class="mt-badge">
+                        {{ p.moduleType || 'manifest' }}<template v-if="p.packVersion"> · {{ p.packVersion }}</template>
+                      </span>
+                      <span v-else class="mt-badge mt-badge-warn">no manifest</span>
                     </span>
-                    <span v-else class="mt-badge mt-badge-warn">no manifest</span>
-                  </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </template>
+            </template>
 
-          <template v-else-if="sourceTab === 'cache'">
-            <div v-if="cacheLoading" class="mt-empty">
-              <i class="fa fa-spinner fa-spin"></i> Scanning pack cache...
-            </div>
-            <div v-else-if="filteredCacheSources.length === 0" class="mt-empty">
-              {{ mtQuery ? 'No packs match "' + mtQuery + '".' : 'No Minecraft pack cache found.' }}
-            </div>
-            <div v-else class="mt-cache-sources">
-              <div v-for="src in filteredCacheSources" :key="src.path" class="mt-cache-source">
-                <div class="mt-cache-source-head">
-                  <span class="mt-cache-source-name">{{ src.name }}</span>
-                  <span class="mt-cache-source-path" :title="src.path">{{ src.path }}</span>
-                </div>
-                <div class="mt-items">
-                  <div
-                    v-for="p in src.packs"
-                    :key="'c-' + src.path + '-' + p.dirName"
-                    class="mt-item"
-                    :class="{ active: isSel({ kind: 'cache', name: p.dirName, basePath: src.path }) }"
-                    @click="openItem({ kind: 'cache', name: p.dirName, basePath: src.path, label: src.name + ' / ' + p.name, displayName: p.name })"
-                  >
-                    <img v-if="p.iconURI" :src="p.iconURI" class="mt-item-icon" alt="" />
-                    <div v-else class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
-                    <div class="mt-item-info">
-                      <span class="mt-item-name">{{ p.name }}</span>
-                      <span v-if="p.description" class="mt-item-desc">{{ p.description }}</span>
-                      <span class="mt-item-meta">
-                        <span class="mt-badge">cache</span>
-                      </span>
+            <template v-else-if="sourceTab === 'cache'">
+              <div v-if="cacheLoading" class="mt-empty">
+                <i class="fa fa-spinner fa-spin"></i> Scanning pack cache...
+              </div>
+              <div v-else-if="filteredCacheSources.length === 0" class="mt-empty">
+                {{ mtQuery ? 'No packs match "' + mtQuery + '".' : 'No Minecraft pack cache found.' }}
+              </div>
+              <div v-else class="mt-cache-sources">
+                <div v-for="src in filteredCacheSources" :key="src.path" class="mt-cache-source">
+                  <div class="mt-cache-source-head">
+                    <span class="mt-cache-source-name">{{ src.name }}</span>
+                    <span class="mt-cache-source-path" :title="src.path">{{ src.path }}</span>
+                  </div>
+                  <div class="mt-items">
+                    <div
+                      v-for="p in src.packs"
+                      :key="'c-' + src.path + '-' + p.dirName"
+                      class="mt-item"
+                      :class="{ active: isSel({ kind: 'cache', name: p.dirName, basePath: src.path }) }"
+                      @click="openItem({ kind: 'cache', name: p.dirName, basePath: src.path, label: src.name + ' / ' + p.name, displayName: p.name })"
+                    >
+                      <img v-if="p.iconURI" :src="p.iconURI" class="mt-item-icon" alt="" />
+                      <div v-else class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
+                      <div class="mt-item-info">
+                        <span class="mt-item-name">{{ p.name }}</span>
+                        <span v-if="p.description" class="mt-item-desc">{{ p.description }}</span>
+                        <span class="mt-item-meta">
+                          <span class="mt-badge">cache</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </template>
+            </template>
 
-          <template v-else>
-            <p class="mt-list-hint">Upload an .mcpack to read and edit its manifest. Saving exports a new <code>&lt;name&gt;-updated.mcpack</code> to your output folder.</p>
-            <label ref="uploadDropZone" class="mt-upload-zone"
-                   @drop="onUploadDrop" @dragover="onUploadDragOver" @dragleave="onUploadDragLeave">
-              <input type="file" accept=".mcpack" class="hidden" @change="onUploadChange" />
-              <div v-if="!showUploadInfo" class="mt-upload-inner">
-                <i class="fa fa-cloud-arrow-up"></i>
-                <span class="mt-upload-hint">Drop a .mcpack here or click to upload</span>
-              </div>
-              <div v-else class="mt-upload-info">
-                <span class="mt-upload-name">{{ uploadFile.name }}</span>
-                <span class="mt-upload-size">{{ uploadInfo }}</span>
-              </div>
-            </label>
-            <button class="mt-btn mt-btn-primary mt-upload-confirm" :disabled="uploadChecking || !uploadFile" @click="addUpload">
-              {{ uploadChecking ? 'Checking...' : 'Open Uploaded Pack' }}
-            </button>
-            <div v-if="uploads.length" class="mt-items">
-              <div
-                v-for="(u, i) in uploads"
-                :key="'u-' + u.uid"
-                class="mt-item"
-                :class="{ active: isSel({ kind: 'upload', name: u.name, uid: u.uid }) }"
-                @click="openItem({ kind: 'upload', name: u.name, uid: u.uid, file: u.file, label: u.name + ' (uploaded .mcpack)' })"
-              >
-                <div class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
-                <div class="mt-item-info">
-                  <span class="mt-item-name">{{ u.name }}</span>
-                  <span class="mt-item-meta"><span class="mt-badge">upload</span></span>
+            <template v-else>
+              <p class="mt-list-hint">Upload an .mcpack to read and edit its manifest. Saving exports a new <code>&lt;name&gt;-updated.mcpack</code> to your output folder.</p>
+              <label ref="uploadDropZone" class="mt-upload-zone"
+                     @drop="onUploadDrop" @dragover="onUploadDragOver" @dragleave="onUploadDragLeave">
+                <input type="file" accept=".mcpack" class="hidden" @change="onUploadChange" />
+                <div v-if="!showUploadInfo" class="mt-upload-inner">
+                  <i class="fa fa-cloud-arrow-up"></i>
+                  <span class="mt-upload-hint">Drop a .mcpack here or click to upload</span>
                 </div>
-                <button class="mt-icon-btn mt-remove" title="Remove" @click="removeUpload(i, $event)"><i class="fa fa-trash"></i></button>
+                <div v-else class="mt-upload-info">
+                  <span class="mt-upload-name">{{ uploadFile.name }}</span>
+                  <span class="mt-upload-size">{{ uploadInfo }}</span>
+                </div>
+              </label>
+              <button class="mt-btn mt-btn-primary mt-upload-confirm" :disabled="uploadChecking || !uploadFile" @click="addUpload">
+                {{ uploadChecking ? 'Checking...' : 'Open Uploaded Pack' }}
+              </button>
+              <div v-if="uploads.length" class="mt-items">
+                <div
+                  v-for="(u, i) in uploads"
+                  :key="'u-' + u.uid"
+                  class="mt-item"
+                  :class="{ active: isSel({ kind: 'upload', name: u.name, uid: u.uid }) }"
+                  @click="openItem({ kind: 'upload', name: u.name, uid: u.uid, file: u.file, label: u.name + ' (uploaded .mcpack)' })"
+                >
+                  <div class="mt-item-icon mt-item-ph"><i class="fa fa-box"></i></div>
+                  <div class="mt-item-info">
+                    <span class="mt-item-name">{{ u.name }}</span>
+                    <span class="mt-item-meta"><span class="mt-badge">upload</span></span>
+                  </div>
+                  <button class="mt-icon-btn mt-remove" title="Remove" @click="removeUpload(i, $event)"><i class="fa fa-trash"></i></button>
+                </div>
               </div>
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="mt-editor">
-        <div v-if="!manifest" class="mt-empty mt-editor-empty">
-          <i class="fa fa-id-card"></i>
-          <p>Select a pack to view or edit its manifest, or click "Make New Manifest".</p>
-        </div>
-        <div v-else>
-          <div class="mt-editor-head">
-            <div>
-              <div class="mt-editor-title">Manifest</div>
-              <div class="mt-editor-sub">{{ sourceText }}</div>
-            </div>
-            <div class="mt-editor-actions">
-              <button class="mt-btn" :class="{ 'mt-btn-toggle-on': advanced }" @click="toggleAdvanced" :title="advanced ? 'Switch to form mode' : 'Switch to raw JSON editor'">
-                <i class="fa" :class="advanced ? 'fa-sliders' : 'fa-code'"></i> Advanced
-              </button>
-              <button class="mt-btn" @click="regenerateAll" :disabled="advanced && !rawJson"><i class="fa fa-dice"></i> Regenerate UUIDs</button>
-              <button class="mt-btn" @click="copyManifest"><i class="fa fa-copy"></i> Copy</button>
-              <button class="mt-btn mt-btn-primary" :disabled="saving" @click="save">
-                <i class="fa fa-floppy-disk"></i> {{ isNew ? 'Make a Pack' : (sel && sel.kind === 'upload' ? 'Export Pack' : 'Save to Pack') }}
-              </button>
-            </div>
+            </template>
           </div>
+        </div>
 
-          <div v-if="!advanced" class="mt-form">
-            <div class="mt-field">
-              <label>Pack Name <em>*</em></label>
-              <input v-model="formName" class="mt-input" placeholder="Pack name" />
-            </div>
-            <div class="mt-field">
-              <label>Description</label>
-              <textarea v-model="formDesc" class="mt-input mt-textarea" rows="2" placeholder="Pack description"></textarea>
-            </div>
-            <div class="mt-field-row">
-              <div class="mt-field mt-field-uuid">
-                <label>Header UUID</label>
-                <div class="mt-input-group">
-                  <input v-model="formHeaderUuid" class="mt-input" spellcheck="false" />
-                  <button class="mt-icon-btn" title="Regenerate UUID" @click="regenHeader"><i class="fa fa-dice"></i></button>
-                </div>
+        <div class="mt-editor">
+          <div v-if="!manifest" class="mt-empty mt-editor-empty">
+            <i class="fa fa-id-card"></i>
+            <p>Select a pack to view or edit its manifest, or click "Make New Manifest".</p>
+          </div>
+          <div v-else>
+            <div class="mt-editor-head">
+              <div>
+                <div class="mt-editor-title">Manifest</div>
+                <div class="mt-editor-sub">{{ sourceText }}</div>
               </div>
-              <div class="mt-field mt-field-sm">
-                <label>Version</label>
-                <input v-model="formVersion" class="mt-input" placeholder="1.0.0" />
-              </div>
-              <div class="mt-field mt-field-sm">
-                <label>Min Engine</label>
-                <input v-model="formMinEngine" class="mt-input" placeholder="1.12.1" />
+              <div class="mt-editor-actions">
+                <button class="mt-btn" :class="{ 'mt-btn-toggle-on': advanced }" @click="toggleAdvanced" :title="advanced ? 'Switch to form mode' : 'Switch to raw JSON editor'">
+                  <i class="fa" :class="advanced ? 'fa-sliders' : 'fa-code'"></i> Advanced
+                </button>
+                <button class="mt-btn" @click="regenerateAll" :disabled="advanced && !rawJson"><i class="fa fa-dice"></i> Regenerate UUIDs</button>
+                <button class="mt-btn" @click="copyManifest"><i class="fa fa-copy"></i> Copy</button>
+                <button class="mt-btn mt-btn-primary" :disabled="saving" @click="save">
+                  <i class="fa fa-floppy-disk"></i> {{ isNew ? 'Make a Pack' : (sel && sel.kind === 'upload' ? 'Export Pack' : 'Save to Pack') }}
+                </button>
               </div>
             </div>
 
-            <div class="mt-modules">
-              <div class="mt-modules-head">
-                <span>Modules</span>
-                <button class="mt-btn" @click="addModule"><i class="fa fa-plus"></i> Add</button>
+            <div v-if="!advanced" class="mt-form">
+              <div class="mt-field">
+                <label>Pack Name <em>*</em></label>
+                <input v-model="formName" class="mt-input" placeholder="Pack name" />
               </div>
-              <div v-for="(mod, i) in formModules" :key="i" class="mt-module">
-                <div class="mt-field mt-field-sm">
-                  <label>Type</label>
-                  <select v-model="mod.type" class="mt-input">
-                    <option v-for="t in MODULE_TYPES" :key="t" :value="t">{{ t }}</option>
-                  </select>
-                </div>
-                <div class="mt-field mt-field-module-desc">
-                  <label>Description</label>
-                  <input v-model="mod.description" class="mt-input" placeholder="Module description" />
-                </div>
-                <div class="mt-field mt-field-module-uuid">
-                  <label>UUID</label>
+              <div class="mt-field">
+                <label>Description</label>
+                <textarea v-model="formDesc" class="mt-input mt-textarea" rows="2" placeholder="Pack description"></textarea>
+              </div>
+              <div class="mt-field-row">
+                <div class="mt-field mt-field-uuid">
+                  <label>Header UUID</label>
                   <div class="mt-input-group">
-                    <input v-model="mod.uuid" class="mt-input" spellcheck="false" />
-                    <button class="mt-icon-btn" title="Regenerate UUID" @click="regenModule(i)"><i class="fa fa-dice"></i></button>
+                    <input v-model="formHeaderUuid" class="mt-input" spellcheck="false" />
+                    <button class="mt-icon-btn" title="Regenerate UUID" @click="regenHeader"><i class="fa fa-dice"></i></button>
                   </div>
                 </div>
                 <div class="mt-field mt-field-sm">
                   <label>Version</label>
-                  <input v-model="mod.version" class="mt-input" />
+                  <input v-model="formVersion" class="mt-input" placeholder="1.0.0" />
                 </div>
-                <button class="mt-icon-btn mt-remove" title="Remove module" @click="removeModule(i)"><i class="fa fa-trash"></i></button>
+                <div class="mt-field mt-field-sm">
+                  <label>Min Engine</label>
+                  <input v-model="formMinEngine" class="mt-input" placeholder="1.12.1" />
+                </div>
+              </div>
+
+              <div class="mt-modules">
+                <div class="mt-modules-head">
+                  <span>Modules</span>
+                  <button class="mt-btn" @click="addModule"><i class="fa fa-plus"></i> Add</button>
+                </div>
+                <div v-for="(mod, i) in formModules" :key="i" class="mt-module">
+                  <div class="mt-field mt-field-sm">
+                    <label>Type</label>
+                    <select v-model="mod.type" class="mt-input">
+                      <option v-for="t in MODULE_TYPES" :key="t" :value="t">{{ t }}</option>
+                    </select>
+                  </div>
+                  <div class="mt-field mt-field-module-desc">
+                    <label>Description</label>
+                    <input v-model="mod.description" class="mt-input" placeholder="Module description" />
+                  </div>
+                  <div class="mt-field mt-field-module-uuid">
+                    <label>UUID</label>
+                    <div class="mt-input-group">
+                      <input v-model="mod.uuid" class="mt-input" spellcheck="false" />
+                      <button class="mt-icon-btn" title="Regenerate UUID" @click="regenModule(i)"><i class="fa fa-dice"></i></button>
+                    </div>
+                  </div>
+                  <div class="mt-field mt-field-sm">
+                    <label>Version</label>
+                    <input v-model="mod.version" class="mt-input" />
+                  </div>
+                  <button class="mt-icon-btn mt-remove" title="Remove module" @click="removeModule(i)"><i class="fa fa-trash"></i></button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div v-else class="mt-json-editor-wrap">
-            <div class="mt-json-editor-title">manifest.json <span>edit as JSON</span></div>
-            <textarea v-model="rawJson" class="mt-json-editor" spellcheck="false"></textarea>
-          </div>
+            <div v-else class="mt-json-editor-wrap">
+              <div class="mt-json-editor-title">manifest.json <span>edit as JSON</span></div>
+              <textarea v-model="rawJson" class="mt-json-editor" spellcheck="false"></textarea>
+            </div>
 
-          <div v-if="!advanced" class="mt-preview">
-            <div class="mt-preview-title">manifest.json preview</div>
-            <pre class="mt-pre">{{ previewJson }}</pre>
+            <div v-if="!advanced" class="mt-preview">
+              <div class="mt-preview-title">manifest.json preview</div>
+              <pre class="mt-pre">{{ previewJson }}</pre>
+            </div>
           </div>
         </div>
       </div>
@@ -767,39 +769,57 @@ watch(() => props.active, (val) => {
 
 <style scoped>
 .mt-page {
-  padding: 1.2rem 1.4rem;
-  gap: 1rem;
+  padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
+  align-items: center;
+}
+
+/* The whole tool lives in the same panel the other pages use. */
+.mt-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1080px;
+  padding: 1.5rem;
 }
 
 .mt-toolbar {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+}
+
+/* The header button sits inside the strip, so it stays slim. */
+.mt-toolbar .mt-btn {
+  padding: 0.18rem 0.7rem;
+  font-size: 0.72rem !important;
+  white-space: nowrap;
 }
 
 .mt-toolbar-title {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  min-width: 0;
+  font: inherit;
+  color: inherit;
 }
 
 .mt-toolbar-title .fa {
-  color: var(--accent);
+  color: inherit;
 }
 
 .mt-count {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-dim);
-  border: 1px solid var(--border-subtle);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 999px;
-  padding: 0.15rem 0.6rem;
+  padding: 0.1rem 0.5rem;
+  text-transform: none;
 }
 
 .mt-body {
@@ -828,7 +848,8 @@ watch(() => props.active, (val) => {
 
 .mt-source-tab {
   flex: 1;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0.35rem;
+  white-space: nowrap;
   background: var(--bg-input);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
@@ -1135,7 +1156,8 @@ watch(() => props.active, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
   margin-bottom: 1rem;
 }
 
@@ -1153,7 +1175,15 @@ watch(() => props.active, (val) => {
 .mt-editor-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.mt-editor-actions .mt-btn {
+  font-size: 0.7rem !important;
+  padding: 0.22rem 0.55rem;
+  white-space: nowrap;
 }
 
 .mt-btn {

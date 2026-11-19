@@ -51,10 +51,12 @@ func main() {
 		Height:    800,
 		MinWidth:  800,
 		MinHeight: 600,
+		// The frontend draws its own caption bar (drag region + window buttons).
+		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 2, G: 2, B: 2, A: 1},
+		BackgroundColour: &options.RGBA{R: 237, G: 237, B: 237, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{

@@ -53,10 +53,10 @@ onUnmounted(() => {
     <h1 v-if="!showSuite" class="welcome-text" :class="{ 'fade-in': !hasAnimated }">Welcome to MEW</h1>
 
     <div v-if="showSuite" class="suite-content" :class="{ 'fade-in': !hasAnimated }">
-      <h1 class="text-4xl font-bold mb-4" style="color: var(--accent);">Pack Tools Suite</h1>
-      <p class="text-neutral-400 mb-10" style="color: var(--text-desc);">All the tools you need to handle Minecraft Bedrock texture packs in one place.</p>
+      <h1 class="suite-title">Pack Tools Suite</h1>
+      <p class="suite-sub">All the tools you need to handle Minecraft Bedrock texture packs in one place.</p>
 
-      <div class="flex gap-8 justify-center mb-10">
+      <div class="flex gap-8 justify-center mb-10 home-cards">
         <div class="home-card" @click="emit('navigate', 'packporter')">
           <div class="home-card-header">Pack Porter</div>
           <h3 class="home-card-text">Turn Java Edition resource packs into Bedrock Edition fast and easy.</h3>
@@ -68,7 +68,7 @@ onUnmounted(() => {
       </div>
 
       <div class="about-box">
-        <h3 class="text-xl font-semibold mb-2" style="color: var(--accent);">About MEW</h3>
+        <h3 class="box-header">About MEW</h3>
         <p class="text-sm mb-4" style="color: var(--text-desc);">MEW helps you work with resource packs faster by automating common tasks and keeping things simple.</p>
         <div class="flex justify-around">
           <div>
@@ -83,7 +83,7 @@ onUnmounted(() => {
       </div>
 
       <div v-if="recentPacks.length > 0" class="recent-box">
-        <h3 class="recent-title">Recent Packs</h3>
+        <h3 class="box-header">Recent Packs</h3>
         <div class="recent-list">
           <div v-for="(pack, i) in recentPacks" :key="i" class="recent-item">
             <div class="recent-info">
@@ -120,49 +120,94 @@ onUnmounted(() => {
   transition: opacity 0.7s ease;
 }
 
+.suite-title {
+  font-family: var(--font-pixel);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.suite-sub {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+}
+
+.home-cards {
+  flex-wrap: wrap;
+}
+
 .home-card {
-  border: 1px solid var(--border-medium);
-  background: var(--bg-surface);
   padding: 1.5rem;
+  padding-top: 0;
   width: 280px;
+  max-width: 100%;
   cursor: pointer;
-  transition: all 0.2s;
+  overflow: hidden;
+  text-align: left;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
 .home-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-hover-3);
+  transform: translateY(-2px);
 }
 
 .home-card-header {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: var(--accent);
+  margin: 0 -1.5rem 0.9rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--accent);
+  border-bottom: 2px solid var(--accent-dark);
+  color: #fff;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .home-card-text {
+  font-family: var(--font-body);
   font-size: 0.875rem;
-  color: var(--text-desc);
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .about-box {
-  border: 1px solid var(--border-medium);
-  padding: 1.5rem;
+  padding: 0 1.5rem 1.5rem;
   max-width: 600px;
   margin: 0 auto;
+  overflow: hidden;
 }
 
-.recent-box {
-  border: 1px solid var(--border-medium);
-  padding: 1rem 1.5rem;
-  max-width: 600px;
-  margin: 1.5rem auto 0;
+.box-header {
+  margin: 0 -1.5rem 1rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--accent);
+  border-bottom: 2px solid var(--accent-dark);
+  color: #fff;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-align: left;
 }
 
+.recent-box {
+  padding: 0 1.5rem 1rem;
+  max-width: 600px;
+  margin: 1.5rem auto 0;
+  text-align: left;
+  overflow: hidden;
+}
+
 .recent-title {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--accent);
   margin-bottom: 0.75rem;
 }
@@ -176,8 +221,12 @@ onUnmounted(() => {
 .recent-item {
   display: flex;
   align-items: center;
-  padding: 0.4rem 0.5rem;
-  border-radius: 4px;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 2px dotted var(--border-default);
+}
+
+.recent-item:last-child {
+  border-bottom: none;
 }
 
 .recent-info {

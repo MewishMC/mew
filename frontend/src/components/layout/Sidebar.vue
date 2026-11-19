@@ -11,35 +11,48 @@ const emit = defineEmits(['navigate', 'width-change'])
 const version = ref('')
 
 onMounted(async () => {
-  version.value = await GetVersion()
+  try {
+    version.value = await GetVersion()
+  } catch (e) {
+    // No Wails runtime (browser preview).
+  }
 })
 
-const navItems = [
-  { id: 'home', icon: 'fa-house', label: 'Home' },
-  { id: 'packporter', icon: 'fa-box-open', label: 'Pack Porter' },
-  { id: 'packFolderPorter', icon: 'fa-folder-open', label: 'Multi-Pack Porter' },
-  { id: 'recolor', icon: 'fa-palette', label: 'Pack Editor' },
-  { id: 'animator', icon: 'fa-video', label: 'Animated Inventory' },
-  { id: 'skyconverter', icon: 'fa-cloud-sun', label: 'Sky Converter' },
-  { id: 'packviewer', icon: 'fa-eye', label: 'Pack Viewer' },
-  { id: 'manifest', icon: 'fa-file-lines', label: 'Manifest' },
-  { id: 'recentpacks', icon: 'fa-clock', label: 'Recent Packs' },
-  { id: 'info', icon: 'fa-circle-info', label: 'Info' },
-  { id: 'settings', icon: 'fa-gear', label: 'Settings' },
-  { id: 'contact', icon: 'fa-envelope', label: 'Contact' },
+const navGroups = [
+  {
+    title: 'Dashboard',
+    items: [
+      { id: 'home', icon: 'fa-house', label: 'Home' },
+      { id: 'recentpacks', icon: 'fa-clock', label: 'Recent Packs' },
+    ],
+  },
+  {
+    title: 'Tools',
+    items: [
+      { id: 'packporter', icon: 'fa-box-open', label: 'Pack Porter' },
+      { id: 'packFolderPorter', icon: 'fa-folder-open', label: 'Multi-Pack Porter' },
+      { id: 'recolor', icon: 'fa-palette', label: 'Pack Editor' },
+      { id: 'animator', icon: 'fa-video', label: 'Animated Inventory' },
+      { id: 'skyconverter', icon: 'fa-cloud-sun', label: 'Sky Converter' },
+      { id: 'packviewer', icon: 'fa-eye', label: 'Pack Viewer' },
+      { id: 'manifest', icon: 'fa-file-lines', label: 'Manifest' },
+    ],
+  },
+  {
+    title: 'App',
+    items: [
+      { id: 'info', icon: 'fa-circle-info', label: 'Info' },
+      { id: 'appearance', icon: 'fa-swatchbook', label: 'Appearance' },
+      { id: 'settings', icon: 'fa-gear', label: 'Settings' },
+      { id: 'contact', icon: 'fa-envelope', label: 'Contact' },
+    ],
+  },
 ]
 
-const COLLAPSED_WIDTH = 64
-const EXPANDED_WIDTH = 220
+const EXPANDED_WIDTH = 232
 
-const isExpanded = ref(false)
-
-const sidebarWidth = computed(() => isExpanded.value ? EXPANDED_WIDTH : COLLAPSED_WIDTH)
-
-function toggleSidebar() {
-  isExpanded.value = !isExpanded.value
-  emit('width-change', isExpanded.value ? EXPANDED_WIDTH : COLLAPSED_WIDTH)
-}
+const isExpanded = ref(true)
+const sidebarWidth = computed(() => EXPANDED_WIDTH)
 
 const tooltipVisible = ref(false)
 const tooltipText = ref('')
@@ -67,26 +80,36 @@ function hideTooltip() {
     :class="{ expanded: isExpanded }"
     :style="{ width: sidebarWidth + 'px', minWidth: sidebarWidth + 'px' }"
   >
-    <div class="sidebar-logo">
-      <img src="/logo.png" alt="MEW" />
+    <div class="rail-logo">
+      <div class="logo-frame">
+        <img src="/logo-small.png" alt="MEW" />
+      </div>
+      <div class="brand-text">
+        <h1>MEW</h1>
+        <span>Bedrock pack tools</span>
+      </div>
     </div>
 
-    <ul>
-      <li v-for="item in navItems" :key="item.id"
+    <nav id="nav">
+      <div class="nav-group" v-for="group in navGroups" :key="group.title">
+        <span class="nav-title" v-if="isExpanded">{{ group.title }}</span>
+        <button
+          v-for="item in group.items"
+          :key="item.id"
+          class="nav-item"
           :class="{ active: currentPage === item.id }"
           @click="emit('navigate', item.id)"
           @mouseenter="showTooltip($event, item.label)"
-          @mouseleave="hideTooltip">
-        <i :class="'fa ' + item.icon"></i>
-        <span class="nav-label" v-if="isExpanded">{{ item.label }}</span>
-      </li>
-    </ul>
+          @mouseleave="hideTooltip"
+        >
+          <i :class="'fa ' + item.icon" aria-hidden="true"></i>
+          <span class="nav-label" v-if="isExpanded">{{ item.label }}</span>
+        </button>
+      </div>
+    </nav>
 
-    <div class="sidebar-bottom">
-      <span class="version">v{{ version }}</span>
-      <button class="toggle-btn" @click="toggleSidebar" :title="isExpanded ? 'Collapse sidebar' : 'Expand sidebar'">
-        <i class="fa" :class="isExpanded ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
-      </button>
+    <div class="sidebar-foot">
+      <span class="version">v{{ version || '—' }}</span>
     </div>
 
     <div class="tooltip" v-if="tooltipVisible" :style="tooltipStyle">{{ tooltipText }}</div>
@@ -96,141 +119,197 @@ function hideTooltip() {
 <style scoped>
 .sidebar {
   position: relative;
+  margin: 10px 0 10px 10px;
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 12px 0;
-  z-index: 10;
+  padding: 14px 12px 12px;
   overflow: hidden;
   flex-shrink: 0;
+  z-index: 10;
 }
 
-.sidebar-logo {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 16px;
+.rail-logo {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.sidebar.expanded .sidebar-logo {
-  width: 44px;
-  height: 44px;
+.logo-frame {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  overflow: hidden;
 }
 
-.sidebar-logo img {
+.logo-frame img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
   border-radius: 8px;
+  image-rendering: auto;
 }
 
-.sidebar ul {
-  list-style: none;
-  padding: 0 6px;
-  margin: 0;
+.brand-text {
+  min-width: 0;
+}
+
+.brand-text h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.brand-text span {
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+#nav {
   width: 100%;
+  padding: 0 2px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.sidebar li {
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 10px;
+}
+
+.nav-title {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 2px 10px 4px;
+}
+
+.nav-item {
   position: relative;
-  height: 42px;
+  height: 32px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  gap: 10px;
-}
-
-.sidebar.expanded li {
   justify-content: flex-start;
-  padding-left: 12px;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text-muted);
+  font-family: var(--font-body) !important;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
-.sidebar li i {
-  font-size: 18px;
-  width: 24px;
+.sidebar:not(.expanded) .nav-item {
+  justify-content: center;
+  padding: 0;
+}
+
+.nav-item i {
+  font-size: 16px;
+  width: 22px;
   text-align: center;
   flex-shrink: 0;
+  line-height: 1;
 }
 
-.sidebar li:hover {
-  background: var(--bg-hover-1);
+.nav-item:hover {
+  background: var(--bg-hover-1) !important;
   color: var(--text-secondary);
 }
 
-.sidebar li.active {
-  background: var(--accent-active-bg);
+.nav-item.active {
+  background: var(--accent-soft) !important;
   color: var(--accent-light);
-  border-color: var(--accent-light);
+  font-weight: 600;
 }
 
-.sidebar li.active i {
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.nav-item.active i {
   color: var(--accent);
 }
 
 .nav-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  width: 100%;
+  padding: 9px 2px 0;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.version {
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  color: var(--text-version);
+  padding-left: 2px;
+  user-select: none;
+}
+
+.sidebar:not(.expanded) .version {
+  text-align: center;
+  padding-left: 0;
 }
 
 .tooltip {
   position: fixed;
   transform: translateY(-50%);
-  background: var(--bg-hover-2);
+  background: var(--bg-surface);
   border: 1px solid var(--border-medium);
   color: var(--text-secondary);
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
   font-size: 12px;
-  font-weight: 500;
   white-space: nowrap;
   z-index: 100;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-}
-
-.sidebar-bottom {
-  margin-top: auto;
-  padding: 12px 0 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.version {
-  font-size: 10px;
-  color: var(--text-version);
-  letter-spacing: 0.5px;
-  user-select: none;
-}
-
-.toggle-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-input);
-  color: var(--text-dim);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
-.toggle-btn:hover {
-  background: var(--bg-hover-2);
-  color: var(--text-secondary);
-  border-color: var(--border-focus);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 </style>
