@@ -5,10 +5,10 @@ import { OpenDiscordLink, OpenDonationLink } from '../../../wailsjs/go/main/App'
 <template>
   <div class="page active-page contact-page">
     <div class="contact-content">
-      <div class="contact-hero">
-        <h2 class="contact-title">Contact</h2>
+      <section class="contact-head page-bar-card">
+        <h2 class="card-title"><i class="fa fa-envelope"></i> Contact</h2>
         <p class="contact-tagline">Get in touch with the MEW community</p>
-      </div>
+      </section>
 
       <div class="contact-cards">
         <div class="contact-card">
@@ -48,23 +48,15 @@ import { OpenDiscordLink, OpenDonationLink } from '../../../wailsjs/go/main/App'
 }
 
 .contact-content {
-  max-width: 480px;
+  max-width: 720px;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.contact-hero {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.contact-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--accent);
-  margin: 0 0 0.4rem 0;
+.contact-head {
+  margin-bottom: 0.9rem;
 }
 
 .contact-tagline {

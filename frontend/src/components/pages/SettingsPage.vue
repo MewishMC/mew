@@ -195,9 +195,8 @@ onMounted(loadSettings)
 <template>
   <div class="page active-page settings-page">
     <div class="settings-card">
-      <h2 class="card-title"><i class="fa fa-gear"></i> Settings</h2>
+      <h2 class="card-title"><i class="fa fa-download"></i> Import &amp; Output</h2>
 
-      <div class="setting-group">
         <div class="setting-row">
           <div class="setting-info">
             <span class="setting-label">Auto-Import to Bedrock</span>
@@ -243,17 +242,6 @@ onMounted(loadSettings)
 
         <div class="setting-row">
           <div class="setting-info">
-            <span class="setting-label">Discord Rich Presence</span>
-            <span class="setting-desc">Show what you're doing in MEW on your Discord profile</span>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" v-model="discordRPC" @change="persistSettings" />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
             <span class="setting-label">Open Folder After Export</span>
             <span class="setting-desc">Automatically open the output folder when porting is complete</span>
           </div>
@@ -288,35 +276,10 @@ onMounted(loadSettings)
             </div>
           </div>
         </div>
+    </div>
 
-        <div class="setting-row setting-row-block">
-          <div class="setting-info">
-            <span class="setting-label">Pack Cache Path</span>
-            <span class="setting-desc">Where the Pack Editor finds cached packs. Default: %LOCALAPPDATA%\Temp\Minecraft Bedrock\minecraftpe\packcache\resource. Set this for custom clients with different paths.</span>
-          </div>
-          <div class="dir-picker">
-            <span class="dir-path" v-if="packCachePath">{{ packCachePath }}</span>
-            <span class="dir-path dir-default" v-else>Default (Minecraft Bedrock pack cache)</span>
-            <div class="dir-buttons">
-              <button class="btn-sm btn-main" @click="pickCacheDir"><i class="fa fa-folder-open"></i> Browse</button>
-              <button v-if="packCachePath" class="btn-sm btn-cancel" @click="clearCacheDir">Clear</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="setting-row setting-row-block">
-          <div class="setting-info">
-            <span class="setting-label">Manifest Description</span>
-            <span class="setting-desc">Custom description injected into all ported pack manifests</span>
-          </div>
-          <input
-            v-model="manifestDescription"
-            type="text"
-            placeholder="Leave empty to skip"
-            class="text-input"
-            @change="persistSettings"
-          />
-        </div>
+    <div class="settings-card">
+      <h2 class="card-title"><i class="fa fa-cloud-sun"></i> Sky Subpacks</h2>
 
         <div class="setting-row">
           <div class="setting-info">
@@ -353,6 +316,24 @@ onMounted(loadSettings)
             @change="persistSettings"
           />
         </div>
+    </div>
+
+    <div class="settings-card">
+      <h2 class="card-title"><i class="fa fa-box-open"></i> Pack Content</h2>
+
+        <div class="setting-row setting-row-block">
+          <div class="setting-info">
+            <span class="setting-label">Manifest Description</span>
+            <span class="setting-desc">Custom description injected into all ported pack manifests</span>
+          </div>
+          <input
+            v-model="manifestDescription"
+            type="text"
+            placeholder="Leave empty to skip"
+            class="text-input"
+            @change="persistSettings"
+          />
+        </div>
 
         <div class="setting-row">
           <div class="setting-info">
@@ -375,6 +356,36 @@ onMounted(loadSettings)
             <span class="toggle-slider"></span>
           </label>
         </div>
+    </div>
+
+    <div class="settings-card">
+      <h2 class="card-title"><i class="fa fa-database"></i> App &amp; Data</h2>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Discord Rich Presence</span>
+            <span class="setting-desc">Show what you're doing in MEW on your Discord profile</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" v-model="discordRPC" @change="persistSettings" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row setting-row-block">
+          <div class="setting-info">
+            <span class="setting-label">Pack Cache Path</span>
+            <span class="setting-desc">Where the Pack Editor finds cached packs. Default: %LOCALAPPDATA%\Temp\Minecraft Bedrock\minecraftpe\packcache\resource. Set this for custom clients with different paths.</span>
+          </div>
+          <div class="dir-picker">
+            <span class="dir-path" v-if="packCachePath">{{ packCachePath }}</span>
+            <span class="dir-path dir-default" v-else>Default (Minecraft Bedrock pack cache)</span>
+            <div class="dir-buttons">
+              <button class="btn-sm btn-main" @click="pickCacheDir"><i class="fa fa-folder-open"></i> Browse</button>
+              <button v-if="packCachePath" class="btn-sm btn-cancel" @click="clearCacheDir">Clear</button>
+            </div>
+          </div>
+        </div>
 
         <div class="setting-row">
           <div class="setting-info">
@@ -395,7 +406,6 @@ onMounted(loadSettings)
             <i class="fa fa-folder-open"></i> Open Folder
           </button>
         </div>
-      </div>
     </div>
   </div>
 </template>
@@ -404,42 +414,39 @@ onMounted(loadSettings)
 .settings-page {
   justify-content: safe center;
   align-items: center;
+  gap: 0.9rem;
+  padding-bottom: 1.5rem !important;
 }
 
+/* One card per group, each opening with its own bar so the page reads as a
+   stack of small panels instead of one long list. */
 .settings-card {
   border: 1px solid var(--border-default);
   background: var(--bg-body);
   padding: 1.5rem;
+  box-sizing: border-box;
   width: 100%;
-  max-width: 520px;
-}
-
-.card-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  margin-bottom: 1.25rem;
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.setting-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  max-width: 900px;
+  flex: 0 0 auto;
 }
 
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border-subtle);
+  gap: 1rem;
+  padding: 0.7rem 0.55rem;
+  margin: 0 -0.55rem;
+  border-radius: 8px;
+  transition: background 0.15s;
 }
 
-.setting-row:last-child {
-  border-bottom: none;
+.setting-row + .setting-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.setting-row:hover {
+  background: var(--bg-hover-1);
 }
 
 .setting-row-block {
@@ -452,16 +459,18 @@ onMounted(loadSettings)
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  min-width: 0;
 }
 
 .setting-label {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .setting-desc {
   font-size: 0.75rem;
+  line-height: 1.45;
   color: var(--text-dim);
 }
 
@@ -486,6 +495,7 @@ onMounted(loadSettings)
   background: var(--bg-hover-5);
   border: 1px solid var(--border-focus);
   border-radius: 22px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .toggle-slider::before {
@@ -497,6 +507,7 @@ onMounted(loadSettings)
   bottom: 2px;
   background: var(--text-dim);
   border-radius: 50%;
+  transition: transform 0.15s, background 0.15s;
 }
 
 .toggle input:checked + .toggle-slider {
@@ -533,6 +544,7 @@ onMounted(loadSettings)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
   width: 100%;
 }
 
@@ -638,4 +650,3 @@ onMounted(loadSettings)
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 </style>
-

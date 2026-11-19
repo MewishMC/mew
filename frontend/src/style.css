@@ -79,28 +79,69 @@ img {
   box-shadow: 0 0 0 2px var(--panel-ring), var(--panel-shadow) !important;
 }
 
+/* A plain panel that opens with one of the pink title bars, for page headers
+   that are not a whole settings/editor card. */
+.page-bar-card {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1.5rem;
+  background: var(--bg-surface) !important;
+  border: 2px solid var(--bg-surface) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 2px var(--panel-ring), var(--panel-shadow) !important;
+}
+
+/* Page headers that sit straight on the page background get their own surface,
+   so a custom backdrop image can't wash the heading out. */
+.page-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+  padding: 1.1rem 1.75rem;
+  margin-bottom: 1.5rem;
+  background: var(--bg-surface) !important;
+  border: 2px solid var(--bg-surface) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 0 0 2px var(--panel-ring), var(--panel-shadow) !important;
+}
+
 /* Panel title strips: every card opens with the same pink bar as the Home
-   cards, so the single-card tools, Settings and Appearance read alike. */
+   cards, so the single-card tools, Settings and Appearance read alike. The
+   bar is lit from above and sits on a darker lip, so it reads as a raised
+   label and is closed off by a line underneath, with nothing drawn on top.
+   All four corners are rounded, so the strip reads as a finished bar rather
+   than a slab cut off by the card. */
 .card-title,
 .ap-card-title {
   background: var(--accent) !important;
-  border-bottom: 2px solid var(--accent-dark) !important;
-  border-radius: 4px 4px 0 0 !important;
+  border-bottom: 3px solid var(--accent-dark) !important;
+  /* Square-ish on top so the bar meets the card's own corner exactly, rounded
+     underneath so the bar reads as a finished strip. */
+  border-radius: 6px 6px 10px 10px !important;
   color: #fff !important;
   font-family: var(--font-pixel) !important;
   font-size: 0.8rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.12em !important;
   line-height: 1.5 !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22) !important;
   text-transform: uppercase !important;
-  padding: 0.55rem 1rem !important;
+  padding: 0.6rem 1rem !important;
   display: flex !important;
   align-items: center !important;
   gap: 0.5rem !important;
 }
 
+/* The bars cancel the card's 1.5rem padding and then reach 2px further, so they
+   lie over the card's inner border: that is what removes the pale line above the
+   strip. */
 .card-title {
-  margin: -1.5rem -1.5rem 1rem !important;
+  margin: calc(-1.5rem - 2px) calc(-1.5rem - 2px) 1rem !important;
+  padding-left: calc(1rem + 2px) !important;
+  padding-right: calc(1rem + 2px) !important;
 }
 
 /* Long single-card pages need room above and below the card. */
@@ -114,8 +155,8 @@ img {
 }
 
 .ap-card-title {
-  margin: 0 -1.1rem !important;
-  padding: 0.55rem 1.1rem !important;
+  margin: -2px calc(-1.1rem - 2px) 0.4rem !important;
+  padding: 0.6rem calc(1.1rem + 2px) !important;
 }
 
 /* Buttons ------------------------------------------------------------------ */
@@ -356,15 +397,33 @@ input[type="radio"] {
 }
 
 /* Appearance: backdrop image, glass panels and sidebar side ---------------- */
-body {
+/* The backdrop sits on its own fixed layer so the blur slider can soften it;
+   the layer is oversized so a blurred edge never shows. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -48px;
+  z-index: 0;
+  pointer-events: none;
   background-image: var(--app-backdrop, none);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  filter: blur(var(--backdrop-blur, 0px));
+}
+
+/* Keep the interface above that backdrop layer. */
+.app-layout {
+  position: relative;
+  z-index: 1;
 }
 
 /* Glass: the panels let the backdrop through and blur it. */
 :root[data-glass="1"] .sidebar,
+:root[data-glass="1"] .suite-hero,
+:root[data-glass="1"] .page-hero,
+:root[data-glass="1"] .page-bar-card,
+
 :root[data-glass="1"] .home-card,
 :root[data-glass="1"] .about-box,
 :root[data-glass="1"] .recent-box,
@@ -380,10 +439,10 @@ body {
 :root[data-glass="1"] .ai-pack-card,
 :root[data-glass="1"] .changelog-section,
 :root[data-glass="1"] .installed-section,
+:root[data-glass="1"] .pv-shell,
 :root[data-glass="1"] .progress-notification,
 :root[data-glass="1"] .rp-entry,
 :root[data-glass="1"] .mt-shell,
-:root[data-glass="1"] .pv-shell,
 :root[data-glass="1"] .mt-list,
 :root[data-glass="1"] .mt-editor,
 :root[data-glass="1"] .pv-modal {

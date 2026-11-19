@@ -53,9 +53,6 @@ onUnmounted(() => {
     <h1 v-if="!showSuite" class="welcome-text" :class="{ 'fade-in': !hasAnimated }">Welcome to MEW</h1>
 
     <div v-if="showSuite" class="suite-content" :class="{ 'fade-in': !hasAnimated }">
-      <h1 class="suite-title">Pack Tools Suite</h1>
-      <p class="suite-sub">All the tools you need to handle Minecraft Bedrock texture packs in one place.</p>
-
       <div class="flex gap-8 justify-center mb-10 home-cards">
         <div class="home-card" @click="emit('navigate', 'packporter')">
           <div class="home-card-header">Pack Porter</div>
@@ -120,20 +117,7 @@ onUnmounted(() => {
   transition: opacity 0.7s ease;
 }
 
-.suite-title {
-  font-family: var(--font-pixel);
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--accent);
-  margin-bottom: 0.5rem;
-}
 
-.suite-sub {
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  color: var(--text-muted);
-  margin-bottom: 2rem;
-}
 
 .home-cards {
   flex-wrap: wrap;
@@ -145,7 +129,6 @@ onUnmounted(() => {
   width: 280px;
   max-width: 100%;
   cursor: pointer;
-  overflow: hidden;
   text-align: left;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
@@ -155,15 +138,17 @@ onUnmounted(() => {
 }
 
 .home-card-header {
-  margin: 0 -1.5rem 0.9rem;
-  padding: 0.55rem 0.9rem;
+  margin: -2px calc(-1.5rem - 2px) 0.9rem;
+  padding: 0.6rem calc(0.9rem + 2px);
+  border-radius: 6px 6px 10px 10px;
   background: var(--accent);
-  border-bottom: 2px solid var(--accent-dark);
+  border-bottom: 3px solid var(--accent-dark);
   color: #fff;
   font-family: var(--font-pixel);
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
   text-transform: uppercase;
 }
 
@@ -179,19 +164,20 @@ onUnmounted(() => {
   padding: 0 1.5rem 1.5rem;
   max-width: 600px;
   margin: 0 auto;
-  overflow: hidden;
 }
 
 .box-header {
-  margin: 0 -1.5rem 1rem;
-  padding: 0.55rem 0.9rem;
+  margin: -2px calc(-1.5rem - 2px) 1rem;
+  padding: 0.6rem calc(0.9rem + 2px);
+  border-radius: 6px 6px 10px 10px;
   background: var(--accent);
-  border-bottom: 2px solid var(--accent-dark);
+  border-bottom: 3px solid var(--accent-dark);
   color: #fff;
   font-family: var(--font-pixel);
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.22);
   text-transform: uppercase;
   text-align: left;
 }

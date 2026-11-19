@@ -223,7 +223,6 @@ watch(() => props.active, (active) => {
                  placeholder="...or paste a MediaFire link"
                  class="url-input" @paste="onUrlPaste" @keyup.enter="onUrlEnter" />
         </div>
-        <p class="card-hint">Pasting a link or pressing Enter starts porting it immediately.</p>
       </div>
 
       <div v-else class="progress-section">

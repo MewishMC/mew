@@ -262,8 +262,6 @@ watch(() => props.active, (isActive) => {
       </div>
 
       <div v-if="tab === 'installed'" class="installed-section">
-        <p class="card-desc">Pick a pack to edit its textures in place.</p>
-
         <div class="re-search-wrap">
           <i class="fa fa-search"></i>
           <input v-model="searchQuery" class="re-search" type="text" placeholder="Search packs..." />
