@@ -102,12 +102,6 @@ export function selectSimilarColors(imageData, x, y, tolerance, skipTransparent 
   return mask
 }
 
-// Paint bucket: flood-select then fill with color.
-export function bucketFill(imageData, x, y, color, tolerance) {
-  const mask = floodSelect(imageData, x, y, tolerance, false)
-  applyColorMask(imageData, mask, color)
-  return mask
-}
 
 export function applyColorMask(imageData, mask, [r, g, b, a]) {
   if (!mask) return
@@ -221,9 +215,6 @@ export function gradientFill(imageData, mask, x0, y0, x1, y1, color0, color1, mo
   }
 }
 
-export function applyColorToMask(imageData, mask, color) {
-  applyColorMask(imageData, mask, color)
-}
 
 export function hexToRgb(hex) {
   let h = String(hex || '#ffffff').replace('#', '')

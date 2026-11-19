@@ -5,7 +5,7 @@ import { ref, watch } from 'vue'
 // as one JSON blob so export/import and the pre-paint script stay in sync.
 const KEY = 'mew_appearance'
 
-export const ACCENT_HUE_DEFAULT = 336
+const ACCENT_HUE_DEFAULT = 336
 export const CUSTOM_FONT_FAMILY = 'MEW Custom Font'
 
 const DEFAULT_STACK = "'Segoe UI', system-ui, -apple-system, sans-serif"
@@ -60,7 +60,7 @@ export function appearanceSnapshot() {
   }
 }
 
-export function persistAppearance() {
+function persistAppearance() {
   try {
     localStorage.setItem(KEY, JSON.stringify(appearanceSnapshot()))
   } catch (e) {

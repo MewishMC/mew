@@ -107,10 +107,3 @@ func (a *App) emitProgress(title, message, icon, fileName string, total, complet
 	})
 }
 
-func (a *App) emitFinished(title, message, icon string) {
-	a.emit("finished", map[string]interface{}{
-		"title":   title,
-		"message": message,
-		"icon":    icon,
-	})
-}

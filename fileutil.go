@@ -203,23 +203,6 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-func copyDirAll(src, dst string) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, path)
-		dstPath := filepath.Join(dst, rel)
-		if d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-		return copyFile(path, dstPath)
-	})
-}
 
 func createZipFromFolder(srcDir, zipPath string) error {
 	outFile, err := createOutputFile(zipPath)

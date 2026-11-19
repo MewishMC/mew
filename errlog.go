@@ -89,9 +89,6 @@ func formatError(prefix string, err error) string {
 	return fmt.Sprintf("%s: %s", prefix, strings.TrimSpace(err.Error()))
 }
 
-func logErrorf(format string, args ...interface{}) {
-	logError(fmt.Sprintf(format, args...))
-}
 
 func debugLog(msg string) {
 	ts := time.Now().Format(errLogDateFmt)
