@@ -45,8 +45,9 @@ func (a *App) GetRecentPacks() []RecentPack {
 	return a.loadRecentPacks(5)
 }
 
+// GetAllRecentPacks returns the whole history, not just the newest few.
 func (a *App) GetAllRecentPacks() []RecentPack {
-	return a.loadRecentPacks(50)
+	return a.loadRecentPacks(0)
 }
 
 func (a *App) loadRecentPacks(max int) []RecentPack {
@@ -60,7 +61,7 @@ func (a *App) loadRecentPacks(max int) []RecentPack {
 		return []RecentPack{}
 	}
 
-	if len(packs) > max {
+	if max > 0 && len(packs) > max {
 		packs = packs[:max]
 	}
 	return packs
@@ -80,9 +81,6 @@ func (a *App) AddRecentPack(name, path string) {
 	}
 
 	packs = append([]RecentPack{newPack}, packs...)
-	if len(packs) > 10 {
-		packs = packs[:10]
-	}
 
 	jsonData, err := json.MarshalIndent(packs, "", "  ")
 	if err != nil {

@@ -63,26 +63,25 @@ onUnmounted(() => {
 <template>
   <div class="page active-page recentpacks-page">
     <div class="rp-content">
-      <div class="rp-hero">
-        <i class="fa fa-clock rp-hero-icon"></i>
-        <h2 class="rp-title">Recent Packs</h2>
-      </div>
-      <p class="rp-desc">Recently ported packs.</p>
+      <section class="rp-head page-bar-card">
+        <h2 class="card-title"><i class="fa fa-clock"></i> Recent Packs</h2>
+        <p class="rp-desc">Recently ported packs.</p>
 
-      <div v-if="recentPacks.length === 0" class="rp-empty">
+        <div v-if="recentPacks.length === 0" class="rp-empty">
         <i class="fa fa-box-open"></i>
         <p>No packs ported yet.</p>
       </div>
 
-      <div v-else class="rp-list">
-        <div v-for="(pack, i) in recentPacks" :key="i" class="rp-entry">
-          <div class="rp-header">
-            <i class="fa fa-box-open rp-icon"></i>
-            <span class="rp-name" v-html="parseBedrockCodes(pack.name)"></span>
-            <span class="rp-date">{{ formatTimestamp(pack.timestamp) }}</span>
+        <div v-else class="rp-list">
+          <div v-for="(pack, i) in recentPacks" :key="i" class="rp-entry">
+            <div class="rp-header">
+              <i class="fa fa-box-open rp-icon"></i>
+              <span class="rp-name" v-html="parseBedrockCodes(pack.name)"></span>
+              <span class="rp-date">{{ formatTimestamp(pack.timestamp) }}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
@@ -96,36 +95,17 @@ onUnmounted(() => {
 }
 
 .rp-content {
-  max-width: 560px;
+  max-width: 840px;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.rp-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.rp-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 0.25rem;
-}
-
-.rp-hero-icon {
-  font-size: 2rem;
-  color: var(--accent);
-  margin-bottom: 0.5rem;
-}
-
 .rp-desc {
   font-size: 0.875rem;
   color: var(--text-desc);
-  margin-bottom: 1.5rem;
+  margin: 0 0 0.6rem;
 }
 
 .rp-empty {
@@ -133,7 +113,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  padding: 2rem;
+  padding: 1.5rem 0 0.5rem;
   color: var(--text-dim);
   font-size: 0.85rem;
 }
@@ -147,14 +127,20 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
 }
 
+/* Flat rows inside the card: the shared panel styling would nest a card in a
+   card and spill past the box, so it is reset here. */
 .rp-entry {
-  background: var(--bg-hover-1);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0.55rem 0;
+}
+
+.rp-entry + .rp-entry {
+  border-top: 1px solid var(--border-subtle) !important;
 }
 
 .rp-header {
