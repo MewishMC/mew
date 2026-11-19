@@ -24,7 +24,7 @@ const (
 	ExeName = "mew.exe"
 	// LatestReleaseAPI answers 404 when the repository has no release yet,
 	// instead of redirecting to the releases page like /releases/latest does.
-	LatestReleaseAPI = "https://api.github.com/repos/KyarottoOwO/mew/releases/latest"
+	LatestReleaseAPI = "https://api.github.com/repos/MewishMC/mew/releases/latest"
 )
 
 // httpClient is bounded so a slow or unreachable GitHub delays MEW by seconds

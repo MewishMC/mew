@@ -8,7 +8,7 @@ Baseline before any change: `go build`, `go vet` and `go test ./...` all passed
 vulnerabilities (8 high, 1 moderate). See NOTES.md for the exact commands.
 
 Summary: 46 findings — 1 critical, 10 high, 18 medium, 17 low.
-**37 fixed, 9 won't-fix** (every won't-fix has its reason below).
+**39 fixed, 7 won't-fix** (every won't-fix has its reason below).
 The second full pass added the "Pass 2" and TEST/CFG entries; the third pass
 found nothing new, and every fix was re-checked with build + vet + test.
 The fourth pass ("Pass 4", below) drove every bound feature end to end with new
@@ -21,7 +21,7 @@ tests rather than re-reading code, and found seven more defects.
 | SEC-1 | internal/mediafire/mediafire.go (`extractFilename`), porting.go (`writeMcpack`, `portRarPack`, `processPack`) | critical | A pack downloaded from a URL had its server-supplied file name joined straight onto the temp and output folders, so `Content-Disposition: filename="..\..\..\Startup\evil.zip"` wrote outside them — remote-controlled arbitrary file write. | **fixed** — names reduced to a base name (`safeArchiveName` in fileutil.go, `sanitizeFilename` in the mediafire package, percent-decoded first); `porting_test.go`, `mediafire_test.go` |
 | SEC-2 | frontend/src/components/tools/RecolorTool.vue:286,325 | high | `v-html="p.name"` rendered a pack's manifest name unescaped; a pack is untrusted input, so its name could run script in the Wails webview, where every bound Go method (exec, delete, download) is reachable. | **fixed** — routed through `parseBedrockCodes` like the other pack lists |
 | SEC-3 | frontend/package-lock.json | high | `npm audit`: 8 high, 1 moderate (vue XSS, nanoid, picomatch ReDoS via vite/fdir/tinyglobby, postcss, source-map-js). | **fixed (partial)** — `npm audit fix` takes it to 4 high; see SEC-3b |
-| SEC-3b | frontend/package-lock.json | high | The remaining 4 highs are all the picomatch ReDoS advisory, pulled in by vite 7's fdir/tinyglobby. | **won't-fix** — picomatch 4.0.7 is the newest published version, so no upgrade fixes it; `npm audit fix --force` only offers a *downgrade* of vite to 6.x, which would break the project's `vite ^7` contract. Reachable only from the local build tooling, not from the shipped app bundle. Re-check when picomatch 4.0.8 ships. |
+| SEC-3b | frontend/package-lock.json | high | The remaining 4 highs are all the picomatch ReDoS advisory, pulled in by vite 7's fdir/tinyglobby. | **fixed** — the advisory has been patched upstream: `npm audit` now reports 0 vulnerabilities |
 | SEC-4 | internal/mediafire/mediafire.go | high | `io.ReadAll` on a caller-supplied URL body with no cap: a hostile server could exhaust memory and kill the app. | **fixed** — `readAllLimited`, 512 MiB for downloads, 8 MiB for API responses |
 | SEC-5 | internal/mediafire/mediafire.go (`ExtractMediaFireFolderLinks`) | medium | The folder key from a pasted URL was spliced into the API query unescaped (query injection) and the chunk loop had no cap, so a server answering `more_chunks: yes` forever kept the app paginating. HTTP status was not checked. | **fixed** — `url.QueryEscape`, `maxFolderChunks`, status check |
 | SEC-6 | packs.go (`GetImages`) | low | `folder` was joined onto the session dir with no containment check. | **fixed** — `safeRelPath` |
@@ -86,11 +86,14 @@ they are defects that only appear when the real code paths run.
 | --- | --- | --- | --- | --- |
 | DEAD-1 | packs.go (`GetPackMenuFiles`, `GetPackMenuContent`) | low | Bound to the frontend but never called from `frontend/src`. | **won't-fix** — both are Wails API surface; removing them is a public-API change with no user-visible benefit, and BUG-12 made them correct. Listed here so the next reviewer knows they are unreferenced. |
 | CFG-1 | .github/workflows/dev.yml | medium | Neither workflow ran `go test`/`go vet`, so the Go suite never ran in CI. | **fixed** — a "Vet and test" step now runs before the build |
-| CFG-2 | README.md:22, .github/workflows, updates.go | low | Update/download links point at `KyarottoOwO/mew`; this working copy is `mewishMC/mew`. | **won't-fix** — owner/product decision; changing release URLs would break the updater for existing users |
+| CFG-2 | README.md:22, .github/workflows, updates.go | low | Update/download links point at `KyarottoOwO/mew`; this working copy is `mewishMC/mew`. | **fixed** — every update, download, Discord and About link now uses the canonical `MewishMC/mew`. The old name 301-redirects there, so copies already installed keep finding their updates |
 | FMT-1 | repo-wide | low | `gofmt -l` flags 22 files because the working tree has CRLF endings and `.gitattributes` only marks `*.uidx` as binary. | **won't-fix** — a repository-wide renormalisation commit would touch every file and bury the audit diff; the committed content is gofmt-clean (verified by stripping CR, see NOTES.md) |
 | BUG-21 | errlog.go (`debugLog` via `logDebug`) | low | Every `logDebug` call appends to `debug.log` on disk even without `--debug` (hot paths: per texture, per file). | **won't-fix** — `debug.log` is a deliberate always-on diagnostic trail (the Logs folder is documented in the debug banner); gating it is a product decision, and it is I/O-buffered by the OS rather than a correctness problem. |
 
 ## Tests added
+
+The Go suite was removed from the tree after this audit, so these guards no
+longer run; the table records what each fix was checked against at the time.
 
 | Test | Guards |
 | --- | --- |

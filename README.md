@@ -19,7 +19,7 @@ A desktop app built with [Wails](https://wails.io/) (Go + Vue 3) for converting,
 
 ## Download
 
-Grab the latest release from the [Releases](https://github.com/KyarottoOwO/mew/releases) page.
+Grab the latest release from the [Releases](https://github.com/MewishMC/mew/releases) page.
 
 ## Build from Source
 

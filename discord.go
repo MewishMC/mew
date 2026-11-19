@@ -20,7 +20,7 @@ import (
 const (
 	discordClientID    = "1513804565366177882"
 	discordLargeImage  = "mew_logo"
-	discordGitHubURL   = "https://github.com/KyarottoOwO/mew"
+	discordGitHubURL   = "https://github.com/MewishMC/mew"
 	discordInviteURL   = "https://discord.gg/nv9GrqTVM3"
 	discordDialTimeout = 2 * time.Second
 )
