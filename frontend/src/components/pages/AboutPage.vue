@@ -14,7 +14,7 @@ function openGitHub(url) {
 
 const quickFacts = [
   { icon: 'fa-shield', label: 'Runs entirely offline', desc: 'Your files never leave your computer' },
-  { icon: 'fa-box-open', label: 'Java \u2192 Bedrock', desc: 'One-click porting powered by SwimPorter' },
+  { icon: 'fa-box-open', label: 'Java \u2192 Bedrock', desc: 'Porting the pack of your dreams' },
   { icon: 'fa-bolt', label: 'Fast & light', desc: 'A small Go app, no waiting around' },
   { icon: 'fa-chalkboard-user', label: 'Beginner friendly', desc: 'Wizard-style flows for every task' },
 ]
@@ -25,7 +25,7 @@ const tools = [
     name: 'Pack Porter',
     body:
       'Upload a <code>.zip</code> or <code>.rar</code> Java texture pack, or paste a MediaFire link. ' +
-      'MEW converts it to a Bedrock <code>.mcpack</code> in one step using SwimPorter.',
+      'MEW converts it to a Bedrock <code>.mcpack</code> in one step.',
   },
   {
     icon: 'fa-folder-open',
