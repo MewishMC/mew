@@ -7,7 +7,8 @@ import FolderPorter from './components/tools/FolderPorter.vue'
 import RecolorTool from './components/tools/RecolorTool.vue'
 import AnimatedInventory from './components/tools/AnimatedInventory.vue'
 import RecolorEditor from './components/tools/RecolorEditor.vue'
-import InfoPage from './components/pages/InfoPage.vue'
+import AboutPage from './components/pages/AboutPage.vue'
+import ChangelogPage from './components/pages/ChangelogPage.vue'
 import AppearancePage from './components/pages/AppearancePage.vue'
 import SettingsPage from './components/pages/SettingsPage.vue'
 import ContactPage from './components/pages/ContactPage.vue'
@@ -34,7 +35,8 @@ const pageTitles = {
   packviewer: 'Pack Viewer',
   manifest: 'Manifest',
   recentpacks: 'Recent Packs',
-  info: 'Info',
+  about: 'About',
+  changelog: 'Changelog',
   appearance: 'Appearance',
   settings: 'Settings',
   contact: 'Contact',
@@ -182,7 +184,7 @@ function blockCtrlZoom(e) {
       <template v-else-if="updaterState.state === 'error'">
         <span class="update-text">Update failed &mdash; {{ updaterState.error }}</span>
         <button class="update-btn" @click="startUpdate"><i class="fa fa-rotate-right"></i> Retry</button>
-        <button class="update-btn" @click="OpenDownloadLink('https://github.com/KyarottoOwO/mew/releases')">View on GitHub</button>
+        <button class="update-btn" @click="OpenDownloadLink('https://github.com/MewishMC/mew/releases')">View on GitHub</button>
       </template>
 
       <template v-else>
@@ -207,7 +209,8 @@ function blockCtrlZoom(e) {
       <SkyConverter v-show="currentPage === 'skyconverter'" :active="currentPage === 'skyconverter'" />
       <PackViewer v-show="currentPage === 'packviewer'" :active="currentPage === 'packviewer'" :open-pack-req="packViewRequest" />
       <ManifestTool v-show="currentPage === 'manifest'" :active="currentPage === 'manifest'" />
-      <InfoPage v-show="currentPage === 'info'" />
+      <AboutPage v-show="currentPage === 'about'" />
+      <ChangelogPage v-show="currentPage === 'changelog'" />
       <AppearancePage v-show="currentPage === 'appearance'" />
       <SettingsPage v-show="currentPage === 'settings'" />
       <ContactPage v-show="currentPage === 'contact'" />
@@ -234,7 +237,9 @@ body {
 .page-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* The title's own padding spaces it from the ball and its divider, so an
+     extra flex gap here would leave a wider gap on the left than the right. */
+  gap: 0;
   height: 34px;
   flex-shrink: 0;
   padding: 0 8px 0 4px;

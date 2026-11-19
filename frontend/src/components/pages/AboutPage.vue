@@ -1,20 +1,19 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { GetChangelog, CheckForUpdate, GetVersion, OpenDownloadLink, OpenDiscordLink, OpenDonationLink } from '../../../wailsjs/go/main/App'
+import { CheckForUpdate, GetVersion, OpenDownloadLink, OpenDiscordLink, OpenDonationLink } from '../../../wailsjs/go/main/App'
 import { updaterState, startUpdate } from '../../utils/updater'
 
 const currentVersion = ref('')
 const updateInfo = ref(null)
-const changelog = ref([])
 
-const githubURL = 'https://github.com/KyarottoOwO/mew'
+const githubURL = 'https://github.com/MewishMC/mew'
 
 function openGitHub(url) {
   OpenDownloadLink(url)
 }
 
 const quickFacts = [
-  { icon: 'fa-shield-halved', label: 'Runs entirely offline', desc: 'Your files never leave your computer' },
+  { icon: 'fa-shield', label: 'Runs entirely offline', desc: 'Your files never leave your computer' },
   { icon: 'fa-box-open', label: 'Java \u2192 Bedrock', desc: 'One-click porting powered by SwimPorter' },
   { icon: 'fa-bolt', label: 'Fast & light', desc: 'A small Go app, no waiting around' },
   { icon: 'fa-chalkboard-user', label: 'Beginner friendly', desc: 'Wizard-style flows for every task' },
@@ -100,24 +99,14 @@ onMounted(async () => {
   } catch (e) {
     console.error('Failed to check for updates:', e)
   }
-  try {
-    const entries = await GetChangelog()
-    if (entries) changelog.value = entries
-  } catch (e) {
-    console.error('Failed to load changelog:', e)
-  }
 })
 </script>
 
 <template>
-  <div class="page active-page info-page">
-    <div class="info-content">
-      <div class="info-hero">
-        <img src="/logo-small.png" alt="MEW" class="info-logo" />
-        <h2 class="info-title">MEW</h2>
-        <p class="info-tagline">Minecraft Bedrock Texture Pack Manager</p>
-        <span class="info-version" v-if="currentVersion">v{{ currentVersion }}</span>
-      </div>
+  <div class="page active-page about-page">
+    <div class="about-content">
+      <section class="info-about page-bar-card">
+        <h2 class="card-title"><i class="fa fa-circle-info"></i> About MEW</h2>
 
       <p class="info-intro">
         MEW is a small, easy-to-use program made in Go that handles the busy work of Minecraft texture
@@ -169,17 +158,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <section class="info-features">
-        <h3 class="info-section-title">What&rsquo;s inside</h3>
-        <div v-for="tool in tools" :key="tool.name" class="tool-card">
-          <div class="tool-card-header">
-            <span class="tool-icon-wrap"><i :class="'fa ' + tool.icon"></i></span>
-            <h3>{{ tool.name }}</h3>
-          </div>
-          <p v-html="tool.body"></p>
-        </div>
-      </section>
-
       <section class="info-links">
         <button class="info-link-btn" @click="openGitHub(githubURL)">
           <i class="fa-brands fa-github"></i> GitHub
@@ -191,16 +169,16 @@ onMounted(async () => {
           <i class="fa fa-heart"></i> Donate
         </button>
       </section>
+      </section>
 
-      <section v-if="changelog.length > 0" class="changelog-section">
-        <h3 class="info-section-title">Changelog</h3>
-        <div v-for="entry in changelog" :key="entry.tag" class="changelog-entry">
-          <div class="changelog-header">
-            <span class="changelog-tag">v{{ entry.tag }}</span>
-            <span class="changelog-date">{{ entry.date }}</span>
+      <section class="info-features page-bar-card">
+        <h2 class="card-title"><i class="fa fa-box"></i> What&rsquo;s inside</h2>
+        <div v-for="tool in tools" :key="tool.name" class="tool-card">
+          <div class="tool-card-header">
+            <span class="tool-icon-wrap"><i :class="'fa ' + tool.icon"></i></span>
+            <h3>{{ tool.name }}</h3>
           </div>
-          <p class="changelog-body">{{ entry.body }}</p>
-          <a @click.prevent="openGitHub(entry.url)" class="changelog-link">View on GitHub</a>
+          <p v-html="tool.body"></p>
         </div>
       </section>
     </div>
@@ -208,69 +186,27 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.info-page {
+.about-page {
   justify-content: flex-start;
   align-items: center;
   padding: 2.5rem 1rem;
   overflow-y: auto;
 }
 
-.info-content {
-  max-width: 640px;
+/* About on top, then the feature list, both on the same readable column. */
+.about-content {
+  max-width: 1020px;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-}
-
-.info-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 1.25rem;
-}
-
-.info-logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 14px;
-  image-rendering: auto;
-  margin-bottom: 0.85rem;
-  object-fit: contain;
-  box-shadow: 0 0 0 1px var(--border-default), 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.info-title {
-  font-size: 1.9rem;
-  font-weight: 700;
-  color: var(--accent);
-  margin: 0;
-  letter-spacing: 0.02em;
-}
-
-.info-tagline {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-  margin: 0.3rem 0 0.6rem 0;
-}
-
-.info-version {
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  background: var(--bg-hover-1);
-  border: 1px solid var(--border-default);
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  letter-spacing: 0.03em;
+  gap: 1rem;
 }
 
 .info-intro {
   color: var(--text-desc);
   line-height: 1.7;
-  text-align: center;
-  margin: 0.4rem 0 1.25rem 0;
+  margin: 0 0 0.9rem;
   font-size: 0.85rem;
-  max-width: 500px;
 }
 
 .info-update {
@@ -341,22 +277,20 @@ onMounted(async () => {
 }
 
 .info-facts {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 560px;
-  margin-bottom: 1.75rem;
 }
 
 .info-fact {
   display: flex;
   align-items: flex-start;
   gap: 0.65rem;
-  background: var(--bg-hover-1);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 0.7rem 0.8rem;
+  padding: 0.6rem 0;
+}
+
+.info-fact + .info-fact {
+  border-top: 1px solid var(--border-subtle);
 }
 
 .info-fact i {
@@ -390,22 +324,20 @@ onMounted(async () => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
 }
 
-.info-section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin: 0 0 0.25rem 0;
-  text-align: center;
-}
-
+/* Flat rows inside the panel: the shared card styling gives .tool-card a
+   surface, border and ring, which would nest a card in a card. */
 .tool-card {
-  background: var(--bg-hover-1);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0.7rem 0;
+}
+
+.tool-card + .tool-card {
+  border-top: 1px solid var(--border-subtle) !important;
 }
 
 .tool-card-header {
@@ -459,10 +391,9 @@ onMounted(async () => {
 .info-links {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 0.6rem;
   width: 100%;
-  margin: 1.5rem 0 0.5rem 0;
+  margin: 1.1rem 0 0;
 }
 
 .info-link-btn {
@@ -482,54 +413,4 @@ onMounted(async () => {
   background: var(--accent-glow);
 }
 
-.changelog-section {
-  margin-top: 1.25rem;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.changelog-entry {
-  background: var(--bg-hover-1);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
-}
-
-.changelog-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-
-.changelog-tag {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--accent);
-}
-
-.changelog-date {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-}
-
-.changelog-body {
-  font-size: 0.8rem;
-  color: var(--text-desc);
-  line-height: 1.6;
-  margin: 0.25rem 0;
-  white-space: pre-wrap;
-}
-
-.changelog-link {
-  font-size: 0.75rem;
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.changelog-link:hover {
-  text-decoration: underline;
-}
 </style>

@@ -41,7 +41,8 @@ const navGroups = [
   {
     title: 'App',
     items: [
-      { id: 'info', icon: 'fa-circle-info', label: 'Info' },
+      { id: 'about', icon: 'fa-circle-info', label: 'About' },
+      { id: 'changelog', icon: 'fa-clipboard-list', label: 'Changelog' },
       { id: 'appearance', icon: 'fa-swatchbook', label: 'Appearance' },
       { id: 'settings', icon: 'fa-gear', label: 'Settings' },
       { id: 'contact', icon: 'fa-envelope', label: 'Contact' },
