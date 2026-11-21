@@ -4,25 +4,17 @@
 
 - Add more sites: MediaFire, MEGA, Google Drive and Modrinth.
 
+## 3.1.2
+
+- New pink restyle with an Appearance page, plus separate About and Changelog pages.
+
 ## 3.1.1
 
-- Auto-updates: MEW now fetches the new build, swaps it in and restarts itself
-  through the small `update.exe` helper shipped in each release, instead of
-  downloading a copy to Downloads and running it by hand.
+- MEW updates itself through `update.exe`.
 
 ## 3.1.0
 
-- Pack Viewer: the pack's own sky shows again. A leftover `skySlider`
-  reference threw during loading, so the sky step never ran and the viewer
-  always fell back to the default gradient. Removed the Viewer Background and
-  Default Sky Pack settings, which no longer did anything useful.
-- Pack Viewer: dragging left and right now turns the view the same way the
-  pointer moves; up and down were already correct.
-- Recolor editor: saving a texture over an existing one in an installed pack
-  asks before overwriting again (the check was rejected silently).
-- Hardening from the audit: untrusted archive/download names, unbounded
-  downloads, startup event crashes, a custom pack-cache folder, update checks,
-  and fully failed port batches (now report an error).
+- Pack Viewer sky and drag fixes, read-only export overwrite, and hardening from the audit.
 
 ---
 
