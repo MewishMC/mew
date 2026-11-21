@@ -73,23 +73,63 @@ jobs:
             --generate-notes
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      # The Discord embed carries the same notes the app shows, so the entry for
+      # this tag has to exist in CHANGELOG.md.
+      - name: Read the changelog for this release
+        id: notes
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          NOTES="$(awk -v v="$VERSION" '
+            /^## / {
+              if (on) exit
+              if ($0 == "## " v) { on = 1; next }
+            }
+            on { print }
+          ' CHANGELOG.md)"
+          NOTES="$(printf '%s\n' "$NOTES" | sed -e '/./,$!d')"
+          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
+            NOTES="No changelog entry for $VERSION."
+          fi
+          printf '%s\n' "$NOTES" > "${RUNNER_TEMP}/release-notes.md"
+          echo "notes for $VERSION: ${#NOTES} characters"
+
       - name: Notify Discord
         if: steps.release.outputs.tag != ''
         shell: bash
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}
+          NOTES_FILE: ${{ runner.temp }}/release-notes.md
         run: |
-          curl -sS --fail-with-body -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK" <<EOF
-          {
-            "content": "**MEW ${TAG}** is out!",
-            "embeds": [
-              {
-                "title": "Download MEW ${TAG}",
-                "url": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
-                "description": "Windows (x64)",
-                "color": 15293772
-              }
-            ]
+          python - <<'PY'
+          import json, os, urllib.request
+
+          tag = os.environ["TAG"]
+          notes = open(os.environ["NOTES_FILE"], encoding="utf-8").read().strip()
+          # Discord caps an embed description at 4096 characters.
+          if len(notes) > 4000:
+              notes = notes[:4000].rstrip() + "\n…"
+
+          payload = {
+              "content": f"**MEW {tag}** is out!",
+              "embeds": [
+                  {
+                      "title": f"Download MEW {tag}",
+                      "url": os.environ["RELEASE_URL"],
+                      "description": notes,
+                      "footer": {"text": "Windows (x64)"},
+                      "color": 15293772,
+                  }
+              ],
           }
-          EOF
+
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          with urllib.request.urlopen(request) as response:
+              print("discord responded", response.status)
+          PY
