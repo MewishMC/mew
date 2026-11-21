@@ -42,6 +42,17 @@ jobs:
           VERSION="${TAG#v}"
           wails build -upx -ldflags "-s -w -X main.currentVersion=$VERSION"
 
+      # go vet and go test need frontend/dist, which wails build just produced,
+      # so they run here rather than in a separate workflow.
+      - name: Vet and test
+        shell: bash
+        run: |
+          go vet ./...
+          go test ./...
+          cd update
+          go vet ./...
+          go test ./...
+
       # update.exe is its own module: it downloads the new mew.exe, swaps it in
       # and starts it again.
       - name: Build the updater
