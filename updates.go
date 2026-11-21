@@ -25,7 +25,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-var currentVersion = "3.1.2"
+var currentVersion = "3.1.3"
 
 const (
 	// githubRepo is the canonical repository. Builds already installed still ask

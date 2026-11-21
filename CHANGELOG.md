@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.3
+
+- More download links: paste a MEGA, Google Drive or Modrinth link into the Pack
+  Porter, and a MEGA, Google Drive or MediaFire folder link into the Folder
+  Porter. No account or key is needed for any of them.
+- Modrinth mods and datapacks are refused, because Bedrock can use neither.
+
 ## 3.1.1
 
 - Auto-updates: MEW now fetches the new build, swaps it in and restarts itself
