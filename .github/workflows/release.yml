@@ -68,8 +68,10 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
+          # A version entry ends at the next version heading, and after the
+          # oldest one at the "---" that starts the audit notes.
           NOTES="$(awk -v v="$VERSION" '
-            /^## / {
+            /^## |^---$/ {
               if (on) exit
               if ($0 == "## " v) { on = 1; next }
             }
