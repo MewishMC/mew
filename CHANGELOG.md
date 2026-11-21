@@ -2,35 +2,62 @@
 
 ## 3.1.3
 
-- Add more sites: MediaFire, MEGA, Google Drive and Modrinth.
+Added MEGA links, files and folders.
+Added Google Drive file and folder links.
+Added Modrinth project links.
+Mods and datapacks from Modrinth are refused.
 
 ## 3.1.2
 
-- New pink restyle with an Appearance page, plus separate About and Changelog pages.
+Restyled MEW with a new pink theme and an Appearance page.
+Split Info into separate About and Changelog pages.
+Recent Packs now keeps every ported pack.
+Update and download links point at the new repository.
+The changelog is read from GitHub's release and tag feeds.
 
 ## 3.1.1
 
-- MEW updates itself through `update.exe`.
+MEW now updates itself through update.exe.
 
 ## 3.1.0
 
-- Pack Viewer sky and drag fixes, read-only export overwrite, and hardening from the audit.
+Fixed the Pack Viewer's pack sky.
+Dragging left and right now turns the view the right way.
+Saving a texture over an existing one asks before overwriting again.
+Hardened download names, download sizes, update checks and startup events.
 
 ## 3.0.11
 
-- Autosaving recolor sessions.
+Recolor sessions now autosave.
 
 ## 3.0.10
 
-- Pack editor, pack cache and updater features.
+Added the pack editor, pack cache and updater features.
 
 ## 3.0.6
 
-- Manifest editor, Pack Exporter, Java sky subpacks and a Pack Viewer overhaul.
+Added the Manifest editor and Pack Exporter.
+Java skies now port as selectable subpacks.
+Overhauled the Pack Viewer.
 
 ## 3.0.0
 
-- Open-source restructure with the Pack Viewer, MediaFire links and the sky tools.
+Restructured the project for the open source release.
+Added the Pack Viewer and its rendering backend.
+MediaFire links can now be ported.
+The sky tools got a single drop zone and better cubemaps.
+Releases are announced on Discord.
+
+## 2.2.9
+
+Added Bedrock color coding.
+Added a new sky converter page.
+Improved the ui on pack view.
+Added more features to pack view.
+Fixed bugs within pack view.
+Fixed a bug within animated inventory.
+You can now use .png/.jpg in animated inventory.
+Fixed pack naming.
 
 ---
 

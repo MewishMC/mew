@@ -14,6 +14,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The changelog step asks git for the previous tag to build the
+          # compare link, which needs the tags on hand.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -67,7 +71,8 @@ jobs:
         id: notes
         shell: bash
         run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
           # A version entry ends at the next version heading, and after the
           # oldest one at the "---" that starts the audit notes.
           NOTES="$(awk -v v="$VERSION" '
@@ -81,8 +86,20 @@ jobs:
           if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
             NOTES="No changelog entry for $VERSION."
           fi
-          printf '%s\n' "$NOTES" > "${RUNNER_TEMP}/release-notes.md"
-          echo "notes for $VERSION: ${#NOTES} characters"
+          printf '%s\n' "$NOTES" > "${RUNNER_TEMP}/changelog-section.md"
+
+          PREV="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [ -n "$PREV" ]; then
+            LINK="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${PREV}...${TAG}"
+          else
+            LINK="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commits/${TAG}"
+          fi
+          {
+            printf 'Full Changelog: %s\n\n' "$LINK"
+            printf '%s\n' "$NOTES"
+            printf "\nMake sure to join the discord for pings when there's new updates !\n"
+          } > "${RUNNER_TEMP}/release-notes.md"
+          echo "notes for $VERSION: ${#NOTES} characters, compare link $LINK"
 
       - name: Create Release
         id: release
@@ -103,7 +120,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ steps.release.outputs.tag }}
           RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.release.outputs.tag }}
-          NOTES_FILE: ${{ runner.temp }}/release-notes.md
+          NOTES_FILE: ${{ runner.temp }}/changelog-section.md
         run: |
           python - <<'PY'
           import json, os, urllib.request
