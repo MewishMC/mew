@@ -16,6 +16,22 @@
 
 - Pack Viewer sky and drag fixes, read-only export overwrite, and hardening from the audit.
 
+## 3.0.11
+
+- Autosaving recolor sessions.
+
+## 3.0.10
+
+- Pack editor, pack cache and updater features.
+
+## 3.0.6
+
+- Manifest editor, Pack Exporter, Java sky subpacks and a Pack Viewer overhaul.
+
+## 3.0.0
+
+- Open-source restructure with the Pack Viewer, MediaFire links and the sky tools.
+
 ---
 
 Short, append-only summary of the audit's own changes. Details and IDs are in
