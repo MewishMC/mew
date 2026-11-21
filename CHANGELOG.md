@@ -2,9 +2,7 @@
 
 ## 3.1.3
 
-- More download links: paste a MEGA, Google Drive or Modrinth link into the Pack
-  Porter, and a MEGA, Google Drive or MediaFire folder link into the Folder
-  Porter. No account or key is needed for any of them.
+- Add more sites: MediaFire, MEGA, Google Drive and Modrinth.
 
 ## 3.1.1
 
