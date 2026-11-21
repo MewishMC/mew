@@ -61,20 +61,8 @@ jobs:
           cd update
           go build -ldflags "-s -w -H windowsgui" -o ../build/bin/update.exe .
 
-      - name: Create Release
-        id: release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          gh release create "$TAG" build/bin/mew.exe build/bin/update.exe \
-            --title "MEW $TAG" \
-            --generate-notes
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      # The Discord embed carries the same notes the app shows, so the entry for
-      # this tag has to exist in CHANGELOG.md.
+      # The release body and the Discord embed both carry the entry for this
+      # tag, so CHANGELOG.md is the one place that says what changed.
       - name: Read the changelog for this release
         id: notes
         shell: bash
@@ -93,6 +81,18 @@ jobs:
           fi
           printf '%s\n' "$NOTES" > "${RUNNER_TEMP}/release-notes.md"
           echo "notes for $VERSION: ${#NOTES} characters"
+
+      - name: Create Release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" build/bin/mew.exe build/bin/update.exe \
+            --title "MEW $TAG" \
+            --notes-file "${RUNNER_TEMP}/release-notes.md"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Notify Discord
         if: steps.release.outputs.tag != ''
