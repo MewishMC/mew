@@ -8,8 +8,8 @@ A desktop app built with [Wails](https://wails.io/) (Go + Vue 3) for converting,
 
 ## Features
 
-- **Pack Porter** — Convert Java texture packs (`.zip` / `.rar`) to Bedrock `.mcpack` files, or paste a MediaFire link
-- **Multi-Pack Porter** — Batch convert entire folders of packs at once, including MediaFire folder links
+- **Pack Porter** — Convert Java texture packs (`.zip` / `.rar`) to Bedrock `.mcpack` files, or paste a MediaFire, Google Drive, MEGA or Modrinth link
+- **Multi-Pack Porter** — Batch convert entire folders of packs at once, including MediaFire, Google Drive and MEGA folder links
 - **Sky Converter** — Turn any 360° sky image into a working Bedrock sky, or port a Java sky directly
 - **Animated Inventory** — Convert a `.gif` into an animated inventory for Bedrock
 - **Recolor Tool** — Recolor textures with hue/saturation/brightness sliders and paint mode

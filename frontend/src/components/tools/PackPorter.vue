@@ -190,7 +190,7 @@ watch(() => props.active, (active) => {
   <div class="page active-page packporter-page">
     <div class="porter-card">
       <h2 class="card-title">Port Pack</h2>
-      <p class="card-desc">Drop a .zip/.rar pack or paste a MediaFire link &mdash; porting starts automatically, no buttons.</p>
+      <p class="card-desc">Drop a .zip/.rar pack or paste a MediaFire, Google Drive, MEGA or Modrinth link &mdash; porting starts automatically, no buttons.</p>
 
       <div v-if="!showProgress">
         <label ref="dropZone" class="drop-zone"
@@ -220,7 +220,7 @@ watch(() => props.active, (active) => {
         <div class="url-row">
           <i class="fa fa-link url-icon"></i>
           <input v-model="url" type="text"
-                 placeholder="...or paste a MediaFire link"
+                 placeholder="...or paste a MediaFire, Google Drive, MEGA or Modrinth link"
                  class="url-input" @paste="onUrlPaste" @keyup.enter="onUrlEnter" />
         </div>
       </div>

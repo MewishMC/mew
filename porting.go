@@ -15,7 +15,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kyarottoOwO/mew/internal/gdrive"
 	"github.com/kyarottoOwO/mew/internal/mediafire"
+	"github.com/kyarottoOwO/mew/internal/mega"
 	"github.com/swim-services/swim_porter/port"
 	"github.com/swim-services/swim_porter/porterror"
 )
@@ -457,10 +459,22 @@ func (a *App) PortPackFromURL(url string) (string, error) {
 		return "", fmt.Errorf("no URL provided")
 	}
 
+	if gdrive.IsDriveFolderURL(url) {
+		a.logDebug("Rejected: Google Drive folder link pasted into PortPackFromURL")
+		a.emitProgress("Error", "That is a Google Drive folder link. Paste it into the Multi-Pack Porter to port every pack in it.", "error", "", 0, 0)
+		return "", fmt.Errorf("folder links can only be ported with the Multi-Pack Porter")
+	}
+
+	if mega.IsMegaFolderURL(url) {
+		a.logDebug("Rejected: MEGA folder link pasted into PortPackFromURL")
+		a.emitProgress("Error", "That is a MEGA folder link. Paste it into the Multi-Pack Porter to port every pack in it.", "error", "", 0, 0)
+		return "", fmt.Errorf("folder links can only be ported with the Multi-Pack Porter")
+	}
+
 	a.emitProgress("Downloading", "Fetching file from URL...", "info", "", 0, 0)
 	a.logDebug("Downloading from URL...")
 
-	data, filename, err := mediafire.DownloadFromURL(url)
+	data, filename, err := mediafire.DownloadFromURL(gdrive.ResolveDownloadURL(url))
 	if err != nil {
 		a.logDebug(fmt.Sprintf("Download failed: %v", err))
 		a.emitProgress("Error", fmt.Sprintf("Failed to download: %v", err), "error", "", 0, 0)
@@ -698,7 +712,7 @@ func (a *App) PortFolder(url string) error {
 	}()
 
 	client := mediafire.CreateHTTPClient()
-	isFolder := mediafire.IsMediaFireURL(url) && strings.Contains(url, "/folder/")
+	isFolder := isFolderLink(url)
 
 	totalFiles := 0
 	successCount := 0
@@ -720,7 +734,7 @@ func (a *App) PortFolder(url string) error {
 	if isFolder {
 		a.emitProgress("Starting", "Reading folder page...", "info", "", 0, 0)
 
-		fileLinks, err := mediafire.ExtractMediaFireFolderLinks(client, url)
+		fileLinks, err := folderFileLinks(client, url)
 		if err != nil {
 			logError(formatError(fmt.Sprintf("read folder failed: %s", url), err))
 			a.emitProgress("Error", fmt.Sprintf("Failed to read folder: %v", err), "error", "", 0, 0)
@@ -728,8 +742,8 @@ func (a *App) PortFolder(url string) error {
 		}
 
 		if len(fileLinks) == 0 {
-			logError(fmt.Sprintf("no files found in MediaFire folder: %s", url))
-			a.emitProgress("Error", "No files found in the MediaFire folder.", "error", "", 0, 0)
+			logError(fmt.Sprintf("no files found in folder: %s", url))
+			a.emitProgress("Error", "No files found in that folder.", "error", "", 0, 0)
 			return fmt.Errorf("no files found in folder")
 		}
 
@@ -744,7 +758,7 @@ func (a *App) PortFolder(url string) error {
 
 			a.emitProgress("Downloading", fmt.Sprintf("[%d/%d] %s", i+1, totalFiles, fl.Name), "info", fl.Name, totalFiles, i)
 
-			data, _, err := mediafire.DownloadDirect(client, fl.URL)
+			data, _, err := fl.download(client)
 			if err != nil {
 				logError(formatError(fmt.Sprintf("[%d/%d] download failed: %s", i+1, totalFiles, fl.Name), err))
 				log.Printf("Failed to download %s: %v", fl.Name, err)
@@ -763,7 +777,7 @@ func (a *App) PortFolder(url string) error {
 	} else {
 		a.emitProgress("Starting", "Downloading file...", "info", "", 0, 0)
 
-		data, filename, err := mediafire.DownloadFromURL(url)
+		data, filename, err := downloadLink(url)
 		if err != nil {
 			a.emitProgress("Error", fmt.Sprintf("Failed to download: %v", err), "error", "", 0, 0)
 			return err

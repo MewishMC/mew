@@ -24,14 +24,14 @@ const tools = [
     icon: 'fa-box-open',
     name: 'Pack Porter',
     body:
-      'Upload a <code>.zip</code> or <code>.rar</code> Java texture pack, or paste a MediaFire link. ' +
+      'Upload a <code>.zip</code> or <code>.rar</code> Java texture pack, or paste a MediaFire, Google Drive, MEGA or Modrinth link. ' +
       'MEW converts it to a Bedrock <code>.mcpack</code> in one step.',
   },
   {
     icon: 'fa-folder-open',
     name: 'Multi-Pack Porter',
     body:
-      'Paste a MediaFire folder link to download and convert every pack inside, or upload a ' +
+      'Paste a MediaFire, Google Drive or MEGA folder link to download and convert every pack inside, or upload a ' +
       '<code>.zip</code> / <code>.rar</code> full of packs. Each pack is saved as soon as it\u2019s done, ' +
       'so nothing is lost if you cancel halfway.',
   },

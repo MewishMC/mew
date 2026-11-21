@@ -237,7 +237,7 @@ async function cancelPorter() {
   <div class="page active-page folderporter-page">
     <div class="porter-card">
       <h2 class="card-title">Multi-Pack Porter</h2>
-      <p class="card-desc">Drop an archive of packs or paste a MediaFire link &mdash; porting starts automatically, no buttons.</p>
+      <p class="card-desc">Drop an archive of packs or paste a MediaFire, Google Drive or MEGA folder link &mdash; porting starts automatically, no buttons.</p>
 
       <div v-if="!showProgress">
         <label ref="dropZone" class="drop-zone"
@@ -266,7 +266,7 @@ async function cancelPorter() {
         <div class="url-row">
           <i class="fa fa-link url-icon"></i>
           <input v-model="url" type="text"
-                 placeholder="...or paste a MediaFire folder link"
+                 placeholder="...or paste a MediaFire, Google Drive or MEGA folder link"
                  class="url-input" @paste="onUrlPaste" @keyup.enter="onUrlEnter" />
         </div>
       </div>
