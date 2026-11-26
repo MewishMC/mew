@@ -50,6 +50,31 @@ export function applyHsvShift(imageData, hueShift, satShift, brightShift) {
   return imageData
 }
 
+// Pulls a texture toward one colour while keeping its shading: each pixel keeps
+// its luminance and takes the target colour's hue/chroma. strength 0 leaves the
+// pixels alone, 1 recolours them fully.
+export function colorizeImageData(imageData, rgb, strength = 1) {
+  const t = Math.max(0, Math.min(1, strength))
+  if (t === 0) return imageData
+  const [tr, tg, tb] = rgb
+  const peak = Math.max(tr, tg, tb) || 1
+  const nr = tr / peak
+  const ng = tg / peak
+  const nb = tb / peak
+  const data = imageData.data
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue
+    const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255
+    const r = Math.min(255, Math.round(nr * lum * 255))
+    const g = Math.min(255, Math.round(ng * lum * 255))
+    const b = Math.min(255, Math.round(nb * lum * 255))
+    data[i] = Math.round(data[i] + (r - data[i]) * t)
+    data[i + 1] = Math.round(data[i + 1] + (g - data[i + 1]) * t)
+    data[i + 2] = Math.round(data[i + 2] + (b - data[i + 2]) * t)
+  }
+  return imageData
+}
+
 export function applySepia(imageData) {
   const data = imageData.data
   for (let i = 0; i < data.length; i += 4) {

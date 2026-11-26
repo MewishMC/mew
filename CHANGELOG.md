@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+
+The Pack Editor can now select several textures and edit them together.
+Every tool edit on one selected texture is copied onto the others.
+Adjust Color can recolour a texture to a chosen colour instead of only shifting its hue.
+Autosaved edits now refresh their thumbnail in the texture list.
+
 ## 3.1.3
 
 Added MEGA links, files and folders.

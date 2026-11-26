@@ -5,7 +5,7 @@ import {
   ListPackTextures, GetPackTexture, GetPackThumb, SavePackTexture,
   GetPackRoot, OpenFolder
 } from '../../../wailsjs/go/main/App'
-import { applyHsvShift, applySepia, rgbToHsv, hsvToRgb } from '../../utils/hue'
+import { applyHsvShift, applySepia, colorizeImageData, rgbToHsv, hsvToRgb } from '../../utils/hue'
 import {
   floodSelect, selectSimilarColors, applyColorMask, brushStroke, gradientFill, resizeNearestNeighbor,
   loadImage, toThumb, hexToRgb, rgbToHex, canvasToDataURL, cloneImageData
@@ -109,6 +109,13 @@ const sat = ref(0)
 const bright = ref(0)
 let hsvBase = null
 const hsvOpen = ref(false)
+// Recolours the texture to a chosen colour instead of shifting its hue: the
+// pixels keep their shading, but the colour becomes tintColor. Amount blends
+// it against the original, and the Hue/Sat/Bright rows then shift the result.
+const tintColor = ref('#ff3355')
+// 0 keeps the dialog neutral when it opens; picking a different colour arms it
+// at full strength, so choosing a colour is all it takes to recolour.
+const tintAmount = ref(0)
 
 let baseImage = null
 let savedImage = null
@@ -886,6 +893,7 @@ function onPointerDown(e) {
     bucketAt(x, y)
     pointer.value.down = false
     markDirty()
+    mirrorBucket(x, y)
   } else if (tool.value === 'gradient') {
     commit()
     selDrag.value = { x0: x, y0: y, x1: x, y1: y }
@@ -967,16 +975,20 @@ function onPointerUp() {
     renderOverlay()
     return
   }
+  const wasBg = pointer.value.button === 2
   pointer.value.down = false
   hover.value = null
   if ((pointer.value.tool === 'brush' || pointer.value.tool === 'eraser') && pointer.value.moved) {
     markDirty()
+    mirrorStroke(strokePoints, pointer.value.tool === 'eraser', wasBg)
   }
+  strokePoints = []
   if (pointer.value.tool === 'select' && selDrag.value) {
     if (pointer.value.moved) commitRectMask(selDrag.value)
     else stampRect(selDrag.value)
     selBase = null
   }
+  if (pointer.value.tool === 'gradient' && selDrag.value) mirrorGradient(selDrag.value)
   pointer.value.moved = false
   selDrag.value = null
   renderOverlay()
@@ -991,6 +1003,7 @@ function strokeColor() {
 }
 
 function stamp(p) {
+  strokePoints.push(p)
   const data = getImageData()
   const mask = activeMask()
   const color = strokeColor()
@@ -1030,6 +1043,7 @@ function eraseStamp(p) {
 }
 
 function stampMany(pts, isErase) {
+  for (const p of pts) strokePoints.push(p)
   const data = getImageData()
   const mask = activeMask()
   const color = strokeColor()
@@ -1799,8 +1813,12 @@ function setLayerBlend(id, val) {
 }
 
 // ---------- HSV tool ----------
-function shiftWithMask(src, mask) {
-  const out = applyHsvShift(cloneImageData(src), hue.value, sat.value, bright.value)
+// One pass of the Adjust Color dialog: recolour toward the target colour first,
+// then apply the shift rows on top of that. Masked-out pixels are untouched.
+function styledFromValues(src, h, s, b, color, amount, mask) {
+  const base = cloneImageData(src)
+  if (amount > 0) colorizeImageData(base, color, amount)
+  const out = applyHsvShift(base, h, s, b)
   if (mask) {
     for (let i = 0; i < mask.length; i++) {
       if (!mask[i]) out.data.set(src.data.subarray(i * 4, i * 4 + 4), i * 4)
@@ -1809,24 +1827,31 @@ function shiftWithMask(src, mask) {
   return out
 }
 
+function styledFrom(src, mask) {
+  return styledFromValues(src, hue.value, sat.value, bright.value, hexToRgb(tintColor.value), tintAmount.value / 100, mask)
+}
+
+function styledActive() {
+  return hue.value !== 0 || sat.value !== 0 || bright.value !== 0 || tintAmount.value > 0
+}
+
 function applyHsv() {
-  const zero = hue.value === 0 && sat.value === 0 && bright.value === 0
   if (hsvBase) {
     putImageData(hsvBase)
     hsvBase = null
   }
-  if (zero) return
+  if (!styledActive()) return
   const src = getImageData()
   if (!src) return
   commit()
-  putImageData(shiftWithMask(src, activeMask()))
+  putImageData(styledFrom(src, activeMask()))
   actualizeDirty()
+  mirrorHsv()
 }
 
 function previewHsv() {
   if (!currentTex.value || !hsvOpen.value) return
-  const zero = hue.value === 0 && sat.value === 0 && bright.value === 0
-  if (zero) {
+  if (!styledActive()) {
     if (hsvBase) {
       putImageData(hsvBase)
       hsvBase = null
@@ -1837,10 +1862,13 @@ function previewHsv() {
     hsvBase = getImageData()
   }
   if (!hsvBase) return
-  putImageData(shiftWithMask(hsvBase, activeMask()))
+  putImageData(styledFrom(hsvBase, activeMask()))
 }
 
-watch([hue, sat, bright], previewHsv)
+watch([hue, sat, bright, tintColor, tintAmount], previewHsv)
+watch(tintColor, (nv, ov) => {
+  if (ov && nv !== ov && tintAmount.value === 0) tintAmount.value = 100
+})
 
 function cancelHsv() {
   if (hsvBase) {
@@ -1855,6 +1883,7 @@ function hsvReset() {
   hue.value = 0
   sat.value = 0
   bright.value = 0
+  tintAmount.value = 0
 }
 
 function openHsv() {
@@ -1889,6 +1918,7 @@ function applySepiaFilter() {
   }
   putImageData(out)
   actualizeDirty()
+  mirrorSepia()
 }
 
 // ---------- resize ----------
@@ -1924,6 +1954,195 @@ async function applyResize() {
   lastMask = null
   hsvBase = null
   resizing.value = false
+}
+
+// ---------- multi-select + edit mirroring ----------
+// Turn Multi on, click textures to select them, then edit the open texture as
+// usual. Every tool that changes pixels — brush, eraser, bucket, gradient, the
+// hue/sat/bright shift and sepia — replays the same operation on every selected
+// texture and writes it to disk, so one edit recolours them all.
+const batchMode = ref(false)
+const batchSelected = ref([])
+const mirrorBusy = ref(false)
+let mirrorSkipped = false
+let strokePoints = []
+
+const batchPool = computed(() => (allTextures.length ? allTextures : textures.value).filter(t => !!t.relPath))
+const batchCount = computed(() => batchSelected.value.length)
+
+function isBatchSelected(relPath) {
+  return batchSelected.value.includes(relPath)
+}
+
+function toggleBatchSelect(tex) {
+  if (isBatchSelected(tex.relPath)) batchSelected.value = batchSelected.value.filter(r => r !== tex.relPath)
+  else batchSelected.value = [...batchSelected.value, tex.relPath]
+}
+
+function clearBatchSelection() {
+  batchSelected.value = []
+}
+
+function selectAllTextures() {
+  const seen = new Set(batchSelected.value)
+  for (const t of filteredTextures.value) seen.add(t.relPath)
+  batchSelected.value = [...seen]
+}
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) batchSelected.value = []
+}
+
+function onTextureClick(tex) {
+  if (batchMode.value) toggleBatchSelect(tex)
+  else openTexture(tex)
+}
+
+// Fresh bytes for a texture: installed packs read from disk, uploaded packs
+// re-read their session so a texture already recoloured earlier in the run is
+// not read again from a stale list.
+async function freshTextureURI(tex) {
+  if (isInstalled.value) return GetPackTexture(props.source.dirName, tex.relPath, packBasePath.value)
+  const list = (await GetImages(sessionId.value, tex.folder || '')) || []
+  const found = list.find(i => i.relPath === tex.relPath)
+  return found ? found.dataURI : tex.dataURI
+}
+
+async function textureCanvas(tex) {
+  const uri = await freshTextureURI(tex)
+  if (!uri) throw new Error('no image data')
+  const img = await loadImage(uri)
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth || img.width
+  canvas.height = img.naturalHeight || img.height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  return { canvas, ctx, data: ctx.getImageData(0, 0, canvas.width, canvas.height) }
+}
+
+async function writeTextureCanvas(tex, canvas) {
+  const uri = canvasToDataURL(canvas)
+  await writeTexture(tex.relPath, tex.filename, uri.split(',')[1])
+  try {
+    const th = await toThumb(uri)
+    if (th) thumbs.set(tex.relPath, th)
+  } catch (_) {}
+}
+
+// ---------- mirrored edits ----------
+// Replays the operation the current tool just used, not its pixels: a hue
+// shift rotates each texture's own colours rather than copying the open one.
+function hasMirrorTargets() {
+  return batchSelected.value.length > 0
+}
+
+function eraseInData(data, x, y, size, opacityPct) {
+  if (size === 1) {
+    x = Math.floor(x)
+    y = Math.floor(y)
+  }
+  const w = data.width
+  const h = data.height
+  const d = data.data
+  const r = Math.max(0.5, size / 2)
+  const strength = opacityPct / 100
+  for (let yy = Math.floor(y - r); yy <= Math.ceil(y + r); yy++) {
+    for (let xx = Math.floor(x - r); xx <= Math.ceil(x + r); xx++) {
+      if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue
+      const dx = xx - x
+      const dy = yy - y
+      if (dx * dx + dy * dy > r * r) continue
+      const i = (yy * w + xx) * 4 + 3
+      d[i] = Math.round(d[i] * (1 - strength))
+    }
+  }
+}
+
+// Mirrors run one texture at a time so a stroke cannot interleave with the
+// next one; an edit made mid-run is skipped rather than queued, because a
+// queue would replay strokes long after the user stopped drawing.
+async function mirrorEdit(apply) {
+  const sel = new Set(batchSelected.value)
+  const open = new Set(openTabs.value.map(t => t.relPath))
+  const targets = batchPool.value.filter(t => sel.has(t.relPath) && !open.has(t.relPath))
+  if (!targets.length) {
+    if (!mirrorSkipped && sel.size) {
+      mirrorSkipped = true
+      popup('Nothing mirrored', 'Every selected texture is open in a tab, so there is no closed copy to mirror into. Close those tabs or pick other textures.', 'info')
+    }
+    return
+  }
+  if (mirrorBusy.value) return
+  mirrorBusy.value = true
+  try {
+    for (const tex of targets) {
+      try {
+        const { canvas, ctx, data } = await textureCanvas(tex)
+        apply(data)
+        ctx.putImageData(data, 0, 0)
+        await writeTextureCanvas(tex, canvas)
+      } catch (e) {
+        console.warn('[batch] mirror failed:', tex.relPath, e)
+      }
+    }
+  } finally {
+    mirrorBusy.value = false
+  }
+}
+
+function mirrorStroke(pts, isErase, useBg) {
+  if (!pts.length || !hasMirrorTargets()) return
+  const size = brushSize.value
+  const op = opacity.value
+  const color = hexToRgb(useBg ? bg.value : fg.value).concat([Math.round(op * 2.55)])
+  const points = pts.slice()
+  mirrorEdit((data) => {
+    for (const p of points) {
+      if (isErase) eraseInData(data, p.x, p.y, size, op)
+      else brushStroke(data, null, p.x, p.y, size / 2, color)
+    }
+  })
+}
+
+function mirrorBucket(x, y) {
+  if (!hasMirrorTargets()) return
+  const fx = Math.floor(x)
+  const fy = Math.floor(y)
+  const tol = tolerance.value
+  const color = hexToRgb(fg.value).concat([Math.round(opacity.value * 2.55)])
+  mirrorEdit((data) => {
+    const mask = floodSelect(data, fx, fy, tol, false)
+    applyColorMask(data, mask, color)
+  })
+}
+
+function mirrorHsv() {
+  if (!hasMirrorTargets() || !styledActive()) return
+  const h = hue.value
+  const s = sat.value
+  const b = bright.value
+  const color = hexToRgb(tintColor.value)
+  const amount = tintAmount.value / 100
+  mirrorEdit((data) => {
+    data.data.set(styledFromValues(data, h, s, b, color, amount, null).data)
+  })
+}
+
+function mirrorSepia() {
+  if (!hasMirrorTargets()) return
+  mirrorEdit((data) => { applySepia(data) })
+}
+
+function mirrorGradient(g) {
+  if (!hasMirrorTargets() || !g) return
+  const color0 = hexToRgb(fg.value).concat([Math.round(opacity.value * 2.55)])
+  const color1 = hexToRgb(bg.value).concat([Math.round(opacity.value * 2.55)])
+  const mode = gradientMode.value
+  const { x0, y0, x1, y1 } = g
+  mirrorEdit((data) => {
+    gradientFill(data, null, x0, y0, x1, y1, color0, color1, mode)
+  })
 }
 
 // ---------- save ----------
@@ -1997,6 +2216,10 @@ async function flushAutosave(force = false) {
   autosaveBusy = true
   try {
     await writeTexture(relPath, filename, saveBase64())
+    // the tile in the texture strip is drawn from this cache, so refresh it on
+    // every write — not just on an explicit Save, or it keeps showing the
+    // pixels the texture had before the edit
+    await refreshThumb(relPath)
     // only treat the texture as clean if nothing changed while we were writing
     if (currentTex.value && currentTex.value.relPath === relPath) {
       if (equalsImageData(currentImageData(), snapshot)) {
@@ -2798,6 +3021,11 @@ onBeforeUnmount(() => {
         <button class="re-btn" :disabled="!canUndo" @click="undo" title="Undo (Ctrl+Z)"><i class="fa fa-rotate-left"></i></button>
         <button class="re-btn" :disabled="!canRedo" @click="redo" title="Redo (Ctrl+Y)"><i class="fa fa-rotate-right"></i></button>
         <button v-if="isInstalled" class="re-btn" @click="openInExplorer" title="Open pack folder in File Explorer"><i class="fa fa-folder-open"></i></button>
+        <button
+          class="re-btn re-multi" :class="{ on: batchMode }"
+          title="Multi-select: click textures to select them, then every tool edit copies to the selected ones"
+          @click="toggleBatchMode"
+        ><i class="fa fa-object-group"></i> Multi<span v-if="batchMode && batchCount" class="re-multi-count">{{ batchCount }}</span></button>
         <div class="re-savewrap">
           <button class="re-btn re-save" :disabled="!currentTex || busy" @click="saveMenuOpen = !saveMenuOpen">Save <i class="fa fa-caret-down"></i></button>
           <div v-if="saveMenuOpen" class="re-save-menu">
@@ -2988,6 +3216,14 @@ onBeforeUnmount(() => {
               <button v-if="search" class="re-search-clear" @click="search = ''"><i class="fa fa-xmark"></i></button>
             </div>
           </div>
+          <div v-if="batchMode" class="re-batch-bar">
+            <span class="re-batch-count-inline">{{ batchCount }} selected</span>
+            <span class="re-batch-hint">
+              {{ mirrorBusy ? 'copying edit…' : batchCount ? 'tool edits copy to these' : 'click textures to select them · double-click to open' }}
+            </span>
+            <button class="re-btn re-ghost" @click="selectAllTextures">All in view</button>
+            <button class="re-btn re-ghost" @click="clearBatchSelection">Clear</button>
+          </div>
           <div class="re-foldertabs">
             <i class="fa fa-folder"></i>
             <select
@@ -3002,12 +3238,14 @@ onBeforeUnmount(() => {
             <template v-if="filteredTextures.length">
               <div
                 v-for="t in filteredTextures" :key="t.relPath"
-                class="re-tcell" :class="{ active: currentTex && currentTex.relPath === t.relPath }"
-                @click="openTexture(t)"
+                class="re-tcell" :class="{ active: currentTex && currentTex.relPath === t.relPath, selected: isBatchSelected(t.relPath) }"
+                @click="onTextureClick(t)"
+                @dblclick="batchMode && openTexture(t)"
               >
                 <div class="re-tcell-wrap">
                   <img v-if="showThumb(t)" :src="showThumb(t)" class="re-tcell-img" alt="" />
                   <div v-else class="re-tcell-pl"></div>
+                  <span v-if="isBatchSelected(t.relPath)" class="re-tcell-check"><i class="fa fa-check"></i></span>
                 </div>
                 <span class="re-tcell-name">{{ t.filename }}</span>
               </div>
@@ -3050,7 +3288,20 @@ onBeforeUnmount(() => {
           <label class="re-hsv-row"><span>Sat</span><input type="range" min="-100" max="100" v-model.number="sat" class="re-range" /><input type="number" min="-100" max="100" v-model.number="sat" class="re-num" /><b>%</b></label>
           <label class="re-hsv-row"><span>Bright</span><input type="range" min="-100" max="100" v-model.number="bright" class="re-range" /><input type="number" min="-100" max="100" v-model.number="bright" class="re-num" /><b>%</b></label>
         </div>
-        <p class="re-modal-note">Live preview — applies this shift to the active layer (inside the selection if one exists). Numbers carry over as you switch textures.</p>
+        <div class="re-hsv-tint">
+          <label class="re-hsv-row">
+            <span>Colour</span>
+            <input type="color" v-model="tintColor" class="re-hsv-swatch" />
+            <input type="text" v-model="tintColor" class="re-input re-hsv-hex" spellcheck="false" />
+          </label>
+          <label class="re-hsv-row">
+            <span>Amount</span>
+            <input type="range" min="0" max="100" v-model.number="tintAmount" class="re-range" />
+            <input type="number" min="0" max="100" v-model.number="tintAmount" class="re-num" /><b>%</b>
+          </label>
+          <p class="re-modal-note">Recolours the texture to that colour and keeps its shading. 0% leaves the colours alone; the Hue/Sat/Bright rows above then shift the result.</p>
+        </div>
+        <p class="re-modal-note">Live preview — applies this to the active layer (inside the selection if one exists). Numbers carry over as you switch textures.</p>
         <div class="re-modal-actions">
           <button class="re-btn" @click="hsvReset">Reset</button>
           <button class="re-btn" @click="hsvExitCancel">Cancel (Esc)</button>
@@ -3657,6 +3908,31 @@ onBeforeUnmount(() => {
 .re-hsv-pop .re-range {
   flex: 1;
   min-width: 0;
+}
+
+.re-hsv-tint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.re-hsv-swatch {
+  width: 34px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.re-hsv-hex {
+  flex: 1;
+  min-width: 0;
+  text-transform: uppercase;
 }
 
 .re-num {
@@ -4435,4 +4711,63 @@ onBeforeUnmount(() => {
 .re-modal-actions {
   justify-content: flex-end;
 }
+
+/* ---------- multi-select + mirrored edits ---------- */
+.re-multi.on {
+  background: var(--accent-active-bg);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.re-multi-count {
+  margin-left: 0.3rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #12060c;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.re-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.re-batch-count-inline {
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.re-batch-hint {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+
+.re-tcell.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 8px var(--accent-glow);
+}
+
+.re-tcell-check {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #12060c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+}
+
 </style>
